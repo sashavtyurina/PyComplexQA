@@ -2,6 +2,14 @@ import java.nio.file.*;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.io.IOException;
+import java.io.FileInputStream;
+import java.io.InputStreamReader;
+import java.io.BufferedReader;
+import java.io.PrintWriter;
+import java.util.ArrayList;
+import java.util.List;
+import java.io.FileOutputStream;
+import java.io.FileNotFoundException;
 
 import java.nio.channels.AsynchronousServerSocketChannel;
 import java.nio.channels.AsynchronousSocketChannel;
@@ -81,9 +89,9 @@ public class LuceneServer {
         return total;
     }
 
-
     public static void main(String[] args) {
         setUpIndex(indexPath);
+        calulateWordsFrequency("distinctWordsQA.txt");
     }
 
     /// adds another text document to the existing index
@@ -121,4 +129,33 @@ public class LuceneServer {
           System.err.println( e.getClass().getName() + ": " + e.getMessage());
         }
     }
+
+    /// given a file with words, complements it with corpus frequencies
+    public static void calulateWordsFrequency(String filename) {
+        try {
+            BufferedReader reader = new BufferedReader(new InputStreamReader(new FileInputStream(filename)));
+            String nextLine;
+            List<String> words = new ArrayList<String>();
+            while ((nextLine = reader.readLine()) != null) {
+                String word = nextLine.trim();
+                words.add(word);
+            }
+            reader.close();
+
+            PrintWriter writer = new PrintWriter(new FileOutputStream(filename));
+            long total = totalTerms();
+            for (String word : words) {
+                long freq = totalTermFreq(word);
+                writer.println(word + "|" + freq + "|" + total);
+            }
+            writer.close();
+        } catch (FileNotFoundException e) {
+            System.err.println( e.getClass().getName() + ": " + e.getMessage());
+        } catch (IOException e) {
+            System.err.println( e.getClass().getName() + ": " + e.getMessage());
+        }
+
+    }
+
+}
 
