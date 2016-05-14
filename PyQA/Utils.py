@@ -34,12 +34,11 @@ def s_stemmer(tokens):
         return word
     return [s_stem(t) for t in tokens]
 
-def preprocessQuestion(qtitle, qbody):
-    question = qtitle.lower() + ' ' + qbody.lower()
-    question = removeURLs(question)
-    question = removePunctuation(question)
-    question = shrinkRepeatedChars(question)
-    tokens = question.split(' ')
+def preprocessText(text):
+    text = removeURLs(text)
+    text = removePunctuation(text)
+    text = shrinkRepeatedChars(text)
+    tokens = text.split(' ')
     tokens = dropStopWords(tokens)
     tokens = s_stemmer(tokens)
     tokens = removeShortTokens(tokens, 3)
