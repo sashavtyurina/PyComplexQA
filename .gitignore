@@ -1,2 +1,4 @@
 build/*
 .gradle/*
+PyQA/KeywordRankingDB_copy.db
+PyQA/__pycache__/*
