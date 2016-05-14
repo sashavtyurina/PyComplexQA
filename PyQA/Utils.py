@@ -23,12 +23,25 @@ def removeURLs(str):
     # return re.sub(r'https?:\/\/([^\/]+)[^\s]*\s', '\g<1>', str)
     return re.sub(r'https?://([^\/]+)\.[^\s]*\s', '\g<1> ', str)
 
+def s_stemmer(tokens):
+    def s_stem(word):
+        if re.match('.*[^ea]ies$', word):
+            return re.sub('ies$', 'y', word)
+        if re.match('.*[^oae]es$', word):
+            return re.sub('es$', 'e', word)
+        if re.match('.*[^us]s$', word):
+            return re.sub('s$', '', word)
+        return word
+    return [s_stem(t) for t in tokens]
+
 def preprocessQuestion(qtitle, qbody):
     question = qtitle.lower() + ' ' + qbody.lower()
     question = removeURLs(question)
     question = removePunctuation(question)
     question = shrinkRepeatedChars(question)
-    tokens = dropStopWords(question.split(' '))
+    tokens = question.split(' ')
+    tokens = dropStopWords(tokens)
+    tokens = s_stemmer(tokens)
     tokens = removeShortTokens(tokens, 3)
     return ' '.join(tokens)
 
