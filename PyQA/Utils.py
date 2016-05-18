@@ -48,6 +48,34 @@ def preprocessText(text):
     tokens = removeShortTokens(tokens, 3)
     return ' '.join(tokens)
 
+# given a list of tokens, return all queries of length queryLength
+def constructQueries(tokens, queryLength):
+    def addOne(queries, tokens):
+        newQueries = {}
+        for q in queries.items():
+            for i in range(q[1] + 1, len(tokens)):
+                qq = ' '.join([q[0], tokens[i]])
+                newQueries[qq] = max(q[1], i)
+        return newQueries
+
+    queriesOfLengths = {}
+    queries = {}
+    # start by creating all single word queries
+    for i in range(0, len(tokens)):
+        queries[tokens[i]] = i
+    queriesOfLengths[1] = queries.keys()
+
+    # append one word to existing queries
+    for i in range(1, queryLength):
+        queries = addOne(queries, tokens)
+        queriesOfLengths[i+1] = queries.keys()
+
+    return queriesOfLengths[queryLength]
+
+
+
+### ONE TIME FUNCTIONS
+
 # looks through the questions and answers and pick out distinct words and writes them in a file
 def exportDistinctWords():
     distinctWords = set()

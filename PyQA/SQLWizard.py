@@ -1,7 +1,7 @@
 import sqlite3
 from QAS import *
 
-class SQLiteHelper:
+class SQLWizard:
     def __init__(self, dbPath):
         self.dbPath = dbPath
 

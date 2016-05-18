@@ -41,6 +41,17 @@ class KLDWizard:
         print(sortedScoredWords)
         return sortedScoredWords[:N]
 
+    # same as topNWordsFromTokens, only with a foreground model given
+    def topNWordsFromTokensForeground(self, foregroundModel, N):
+        scoredWords = {}
+        for t in foregroundModel.keys():
+            scoredWords[t] = self.wordKLD(t, foregroundModel[t])
+
+        sortedScoredWords = sorted(scoredWords, key=itemgetter(1), reverse=True)
+        print(sortedScoredWords)
+        return sortedScoredWords[:N]
+
+
 
     # given a list of tokens builds a foreground distibution model
     def foregroundModel(tokens):
