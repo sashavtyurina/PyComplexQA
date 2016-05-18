@@ -4,8 +4,6 @@ from Utils import *
 import itertools
 
 
-
-
 def main():
     importSnippetsFromText()
 
