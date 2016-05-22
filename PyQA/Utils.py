@@ -1,11 +1,16 @@
 import json
 import re
 import sqlite3
+from itertools import permutations
+import itertools
 
 # removes punctuations from the string
 def removePunctuation(str):
     str = re.sub(r'\n', ' ', str)
-    return re.sub('[^A-Za-z\s\d]', ' ', str)
+    str = re.sub("[^A-Za-z\s\d']", ' ', str)
+    str = re.sub("(?<![A-Za-z\d])'", ' ', str)
+    str = re.sub("'(?![A-Za-z\d])", ' ', str)
+    return str
 
 # replaces 3 or more repeated chars with a single one
 def shrinkRepeatedChars(str):
@@ -33,7 +38,7 @@ def s_stemmer(tokens):
         if re.match('.*[^oae]es$', word):
             return re.sub('es$', 'e', word)
         if re.match('.*[^us]s$', word):
-            return re.sub('s$', '', word)
+            return re.sub("(?<!')s$", '', word)
         return word
     return [s_stem(t) for t in tokens]
 
@@ -45,11 +50,12 @@ def preprocessText(text):
     tokens = text.split(' ')
     tokens = dropStopWords(tokens)
     tokens = s_stemmer(tokens)
-    tokens = removeShortTokens(tokens, 3)
+    tokens = removeShortTokens(tokens, 2)
     return ' '.join(tokens)
 
 # given a list of tokens, return all queries of length queryLength
-def constructQueries(tokens, queryLength):
+# also requires question text to put the tokens in the queries the same order as they were in the question
+def constructQueries(tokens, queryLength, rawQuestion):
     def addOne(queries, tokens):
         newQueries = {}
         for q in queries.items():
@@ -58,8 +64,18 @@ def constructQueries(tokens, queryLength):
                 newQueries[qq] = max(q[1], i)
         return newQueries
 
+    # order tokens the same way they appear in the question
+    def sortTokens(tokensToSort, rawQuestion):
+        questionTokens = preprocessText(rawQuestion).split(' ')
+        sortedTokens = []
+        for t in questionTokens:
+            if (t in tokensToSort) and (t not in sortedTokens):
+                sortedTokens.append(t)
+        return sortedTokens
+
     queriesOfLengths = {}
     queries = {}
+
     # start by creating all single word queries
     for i in range(0, len(tokens)):
         queries[tokens[i]] = i
@@ -68,10 +84,75 @@ def constructQueries(tokens, queryLength):
     # append one word to existing queries
     for i in range(1, queryLength):
         queries = addOne(queries, tokens)
-        queriesOfLengths[i+1] = queries.keys()
+        queriesOfLengths[i + 1] = queries.keys()
 
     return queriesOfLengths[queryLength]
 
+def averageSnippetIntersection(snippetTokensSets, topWordsSet, queryTokensSet):
+    intersections = []
+    # print('Top words :: ' + str(topWordsSet))
+    # print('Query tokens :: ' + str(queryTokensSet))
+    for singleSnippetTokens in snippetTokensSets:
+        # print('Snippet tokens initial:: ' + str(singleSnippetTokens))
+        singleSnippetTokens.difference_update(queryTokensSet)
+        intersection = singleSnippetTokens.intersection(topWordsSet)
+        intersectionLength = len(intersection)
+        snippetLength = len(singleSnippetTokens)
+        # print('Intersection :: ' + str(intersection))
+        # print('Intersection length :: ' + str(intersectionLength))
+        # print('Snippet length :: ' + str(snippetLength))
+
+        intersections.append(intersectionLength/snippetLength)
+        # print(intersections)
+    result = sum(intersections)/len(intersections)
+    print(result)
+    return result
+
+def totalSnippetIntersection(snippetTokensSet, topWordsSet, queryTokensSet):
+    allSnippetsTokensSet = set(itertools.chain(*snippetTokensSet))
+    allSnippetsTokensSet.difference_update(queryTokensSet)
+    intersection = allSnippetsTokensSet.intersection(topWordsSet)
+    result = len(intersection)/len(allSnippetsTokensSet)
+    print(result)
+    return result
+
+def scoreQuery(query, snippets, answersTopWords, questionTopWords, weights):
+    cleanSnippetTokens = [set(preprocessText(s.snippet).split()) for s in snippets]
+    questionTopWords = set(questionTopWords)
+    answersTopWords = set(answersTopWords)
+
+    aveIntersectionWQuestion = averageSnippetIntersection(cleanSnippetTokens, questionTopWords)
+    aveIntersectionWAnswers = averageSnippetIntersection(cleanSnippetTokens, answersTopWords)
+
+    totalIntersectionWQuestion = totalSnippetIntersection(cleanSnippetTokens, questionTopWords)
+    totalIntersectionWAnswers = totalSnippetIntersection(cleanSnippetTokens, answersTopWords)
+
+    score = weights[0]*aveIntersectionWQuestion + weights[1]*aveIntersectionWAnswers + weights[2]*totalIntersectionWQuestion + weights[3]*totalIntersectionWAnswers
+
+    return score
+
+# given a list of snippets remove the ones that were retrieved from the same page as the question (compare yahooqid)
+# and also remove the ones that look too similar to the question (more than 50% of snippet terms are in the question)
+def filterOutDuplicateSnippets(snippets, question):
+    cleanSnippets = []
+    for s in snippets:
+        if question.yahooqid in s.docURL:
+            continue
+        snippetTokens = set(preprocessText(s.snippet).split(' '))
+        questionTokens = set(preprocessText(' '.join([question.qtitle, question.qbody])).split(' '))
+        intersectionFraction = len(snippetTokens.intersection(questionTokens))/len(snippetTokens)
+        if intersectionFraction > 0.5:
+            continue
+        cleanSnippets.append(s)
+    return cleanSnippets
+
+
+### MISC UTILITIES
+def loadLinesFromTextToList(filePath):
+    gtqueries = []
+    for line in open(filePath):
+        gtqueries.append(line.strip())
+    return gtqueries
 
 
 ### ONE TIME FUNCTIONS
@@ -91,7 +172,7 @@ def exportDistinctWords():
         print(distinctWords)
         print('\n***\n')
 
-    with open('distinctWordsQA.txt', 'w') as f:
+    with open('distinctWordsQA.txt', 'a') as f:
         for w in distinctWords:
             f.write('%s\n' %w)
 
@@ -137,19 +218,37 @@ def importQuestionsFromText():
     connection.close()
 
 # import snippets from text file to a db
-def importSnippetsFromText():
+def importSnippetsFromText(pathToFile):
     connection = sqlite3.connect('Snippets.db')
     cursor = connection.cursor()
     print('Connected to DB')
-    for line in open('AllSnippets.txt'):
+    for line in open(pathToFile):
         jSnippet = json.loads(line.strip())
-        query = jSnippet['queryText']
+        query = preprocessText(jSnippet['queryText'].lower())
+        print(query)
         docURL = jSnippet['docURL']
         snippet = jSnippet['snippet']
         sql = 'insert into snippets (querytext, docurl, snippet) values (?, ?, ?);'
         cursor.execute(sql, (query, docURL, snippet))
     connection.commit()
     connection.close()
+
+# make sure that words in queries are in the same order as in the question
+def updateQueries():
+    with open('UpdatedQueries.txt', 'w') as fOut:
+        gtqueries = loadLinesFromTextToList('gtqueries.txt')
+        for line in open('AllSnippets.txt'):
+            jSnippet = json.loads(line.strip())
+            if jSnippet['queryText'] in gtqueries:
+                continue
+            queryTokens = jSnippet['queryText'].split()
+            for p in permutations(queryTokens):
+                jSnippet['queryText'] = ' '.join(p)
+                fOut.write('%s\n' % json.dumps(jSnippet))
+
+
+
+
 
 
 

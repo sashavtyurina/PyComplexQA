@@ -22,10 +22,16 @@ class KLDWizard:
     # calculates KL divergence of a single word
     def wordKLD(self, word, foregroundProbability):
         if word not in self.wordProbabilities:
+            print(word + ' not in the file')
             return -1
         backgroundProbability = self.wordProbabilities[word]
         P = foregroundProbability
         Q = backgroundProbability
+
+
+        # kl divergence is not defined
+        if Q == 0:
+            Q = 1/self.totalWordsClueweb
         return P * math.log(P/Q)
 
 
@@ -35,10 +41,14 @@ class KLDWizard:
 
         scoredWords = {}
         for t in foreground.keys():
-            scoredWords[t] = self.wordKLD(t, foreground[t])
-
-        sortedScoredWords = sorted(scoredWords, key=itemgetter(1), reverse=True)
-        print(sortedScoredWords)
+            kldScore = self.wordKLD(t, foreground[t])
+            if not kldScore == -1:
+                scoredWords[t] = kldScore
+        # print(scoredWords.items())
+        sortedScoredWords = sorted(scoredWords.items(), key=itemgetter(1), reverse=True)
+        # print(sortedScoredWords)
+        if N == -1:
+            return sortedScoredWords
         return sortedScoredWords[:N]
 
     # same as topNWordsFromTokens, only with a foreground model given
@@ -47,8 +57,7 @@ class KLDWizard:
         for t in foregroundModel.keys():
             scoredWords[t] = self.wordKLD(t, foregroundModel[t])
 
-        sortedScoredWords = sorted(scoredWords, key=itemgetter(1), reverse=True)
-        print(sortedScoredWords)
+        sortedScoredWords = sorted(scoredWords.items(), key=itemgetter(1), reverse=True)
         return sortedScoredWords[:N]
 
 

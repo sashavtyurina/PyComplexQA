@@ -3,3 +3,4 @@ build/*
 PyQA/KeywordRankingDB_copy.db
 PyQA/__pycache__/*
 *.db
+.DS_Store

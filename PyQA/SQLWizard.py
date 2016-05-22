@@ -38,19 +38,23 @@ class SQLWizard:
         return answers
 
     # get all distinct snippets for a give query
-    def getSnippetForQuery(self, queryText):
+    def getNSnippetsForQuery(self, queryText, N):
         connection = sqlite3.connect(self.dbPath)
-        sql = 'select distinct snippet, sid, qid, queryText, docURL from snippets where querytext="' + queryText + '";'
+        if N == -1:
+            sql = 'select distinct snippet, queryText, docURL from snippets where querytext="' + queryText + '";'
+        else:
+            sql = 'select distinct snippet, queryText, docURL from snippets where querytext="' + queryText + '" limit ' + str(N) + ';'
         cursor = connection.execute(sql)
         snippets = []
         for row in cursor:
             snippet = row[0]
-            sid = row[1]
-            qid = row[2]
-            queryText = row[3]
-            docURL = row[4]
-            snippet = SnippetSQL(sid, qid, queryText, docURL, snippet)
+            queryText = row[1]
+            docURL = row[2]
+            snippet = SnippetSQL(queryText, docURL, snippet)
             snippets.append(snippet)
+        if (N != -1) and (len(snippets) < N):
+            print('Not enough snippets for :: ' + queryText + '. Wanted ' + str(N) + " fetched " + str(len(snippets)))
+
         connection.close()
         return snippets
 
