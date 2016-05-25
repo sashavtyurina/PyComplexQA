@@ -99,6 +99,26 @@ def scoreQueriesWithWeight(partialIntersectionsList, weights):
     sortedScores = sorted(scores.items(), key=operator.itemgetter(1), reverse=True)
     return sortedScores
 
+
+def bestWeightsForQuestion(questionLine):
+    '''
+    questionLine is a json object, containing a question text, gtquery,
+    all probes abd their intersection scores
+    '''
+    weights = allWeights()
+
+    question = json.loads(questionLine)
+    gtquery = Utils.preprocessText(question['gtquery'])
+    partialIntersections = question['probes']
+
+    ranksWeightsMap = {}
+    for w in weights:
+        ranksWeightsMap[w] = gtqueryRankForWeights(partialIntersections, gtquery, w)
+
+    sortedRanks = sorted(ranksWeightsMap.items(), key=operator.itemgetter(1))
+    bestWeights = sortedRanks[0][0]
+    return bestWeights
+
 # if __name__ == '__main__':
 
 #     inFilepath = 'intersections.txt'
@@ -166,36 +186,44 @@ def precisionAtM(inFilepath, M):
     counter = 0
     pAtM = 0
     recallAtM = 0
+
     for line in open(inFilepath):
         counter += 1
         question = json.loads(line)
         qtitle = question['qtitle']
         gtquery = Utils.preprocessText(question['gtquery'])
         partialIntersections = question['probes']
+
         equalWeights = (0.25, 0.25, 0.25, 0.25)
-        # gtQueryRank = gtqueryRankForWeights(partialIntersections, gtquery, equalWeights)
-        print('Qtitle :: ' + qtitle)
-        print('GTQuery :: ' + gtquery)
-        # print('GTQuery rank :: %d' % gtQueryRank)
-        print(scoreQueriesWithWeight(partialIntersections, equalWeights)[:M])
+        bestWeights = bestWeightsForQuestion(line)
+
+        # Precision at M
+        gtQueryRank = gtqueryRankForWeights(partialIntersections, gtquery, bestWeights)
+        if gtQueryRank < M:
+            pAtM += 1
+
+        # Recall at M
         gttokens = set(gtquery.split(' '))
-        scoredTopQueries = scoreQueriesWithWeight(partialIntersections, equalWeights)[:M]
+        scoredTopQueries = scoreQueriesWithWeight(partialIntersections, bestWeights)[:M]
         topQueriesNoScores = [item[0] for item in scoredTopQueries]
         topQueriesTokens = [query.split(' ') for query in topQueriesNoScores]
         topQueriesUniqueTokens = set(itertools.chain.from_iterable(topQueriesTokens))
         proportionOfGtTokens = len(topQueriesUniqueTokens.intersection(gttokens)) / len(gttokens)
         recallAtM += proportionOfGtTokens
-        print(proportionOfGtTokens)
 
-
+        print('Qtitle :: ' + qtitle)
+        print('GTQuery :: ' + gtquery)
+        print('GTQuery rank :: %d' % gtQueryRank)
+        print('Proportion of gt tokens in the top M queries :: %f' % proportionOfGtTokens)
+        # print(scoreQueriesWithWeight(partialIntersections, equalWeights)[:M])
         print('\n***\n')
 
-    #     if gtQueryRank < M:
-    #         pAtM += 1
-    # pAtM /= counter
+    pAtM /= counter
     recallAtM /= counter
-    # print('Total questions :: %d\n Precision at M :: %f' % (counter, pAtM))
+    print('Total questions :: %d\n Precision at M :: %f' % (counter, pAtM))
     print('Total questions :: %d\n Recall at M :: %f' % (counter, recallAtM))
+
+
 
 
 if __name__ == '__main__':

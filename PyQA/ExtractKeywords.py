@@ -8,9 +8,29 @@ from Utils import *
 from Keywords import *
 
 def main():
+    print('M = 10')
     precisionAtM('intersections.txt', 10)
+
+    # print('M = 5')
+    # precisionAtM('intersections.txt', 5)
+
     print('done')
     input()
+
+    """
+    Equal weights (0.25, 0.25, 0.25, 0.25)
+    M = 10
+    Total questions :: 82
+    Precision at M :: 0.292683 (gtquery)
+    Total questions :: 82
+    Recall at M :: 0.798780 (gt query tokens)
+
+    M = 5
+    Total questions :: 82
+    Precision at M :: 0.109756 (gt query)
+    Total questions :: 82
+    Recall at M :: 0.689431 (gt query tokens)
+    """
 
     parameterSweep('intersections.txt', 'paramSweep.txt')
     print('done')
