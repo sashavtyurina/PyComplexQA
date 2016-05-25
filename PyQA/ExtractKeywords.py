@@ -8,9 +8,13 @@ from Utils import *
 from Keywords import *
 
 def main():
-    # parameterSweep('intersections.txt', 'paramSweep.txt')
-    # print('done')
-    # input()
+    precisionAtM('intersections.txt', 10)
+    print('done')
+    input()
+
+    parameterSweep('intersections.txt', 'paramSweep.txt')
+    print('done')
+    input()
 
     intersectFile = open('intersections.txt', 'w')
     sqlWiz = SQLWizard('Snippets.db')
