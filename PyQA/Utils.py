@@ -3,6 +3,9 @@ import re
 import sqlite3
 from itertools import permutations
 import itertools
+import Keywords
+from SQLWizard import SQLWizard
+from KLDWizard import KLDWizard
 
 # removes punctuations from the string
 def removePunctuation(str):
@@ -14,7 +17,9 @@ def removePunctuation(str):
 
 # replaces 3 or more repeated chars with a single one
 def shrinkRepeatedChars(str):
-    return re.sub(r'(.)\1{2,}', '\g<1>', str)
+    cleanStr = re.sub(r'(.)\1{2,}', '\g<1>', str)
+    cleanStr = re.sub(r'\s{2,}', ' ', cleanStr)
+    return cleanStr
 
 # removes tokens shorter than minLength
 def removeShortTokens(tokens, minLength):
@@ -94,6 +99,9 @@ def averageSnippetIntersection(snippetTokensSets, topWordsSet, queryTokensSet):
     # print('Query tokens :: ' + str(queryTokensSet))
     for singleSnippetTokens in snippetTokensSets:
         # print('Snippet tokens initial:: ' + str(singleSnippetTokens))
+        # print('Top words :: ' + str(topWordsSet))
+        # print('\n\n')
+
         singleSnippetTokens.difference_update(queryTokensSet)
         intersection = singleSnippetTokens.intersection(topWordsSet)
         intersectionLength = len(intersection)
@@ -102,10 +110,12 @@ def averageSnippetIntersection(snippetTokensSets, topWordsSet, queryTokensSet):
         # print('Intersection length :: ' + str(intersectionLength))
         # print('Snippet length :: ' + str(snippetLength))
 
-        intersections.append(intersectionLength/snippetLength)
+        intersections.append(intersectionLength / snippetLength)
         # print(intersections)
-    result = sum(intersections)/len(intersections)
-    print(result)
+        # print('\n***\n')
+        # input()
+    result = sum(intersections) / len(intersections)
+    # print(result)
     return result
 
 def totalSnippetIntersection(snippetTokensSet, topWordsSet, queryTokensSet):
@@ -156,6 +166,58 @@ def loadLinesFromTextToList(filePath):
 
 
 ### ONE TIME FUNCTIONS
+
+# calculate intersections
+def calcIntersections():
+    intersectFile = open('intersections.txt', 'w')
+    sqlWiz = SQLWizard('Snippets.db')
+    kldWiz = KLDWizard()
+    questions = sqlWiz.getQuestions()
+
+    for question in questions:
+
+        # extract top words from answers
+        print('Extracting top answer words...')
+        answers = sqlWiz.getAnswersForQID(question.qid)
+        top20AnswersWords = [item[0] for item in keywordsFromAnswers(answers, 20)]
+
+        # extract top words from question
+        print('Extracting top question words...')
+        qtext = ' '.join([question.qtitle, question.qtitle, question.qbody])
+        top20QuestionWords = [item[0] for item in keywordsNFromText(qtext, 20)]
+
+        # compose queries
+        print('Composing queries...')
+        top10QuestionWords = top20QuestionWords[:10]
+        queries = list(constructQueries(top10QuestionWords, 3, qtext))
+        queries.append(preprocessText(question.gtquery))
+        print(queries)
+
+        allProbesIntersections = []
+        for query in queries:
+            print('Working with query :: ' + query)
+            snippets = sqlWiz.getNSnippetsForQuery(query, -1)
+            snippets = filterOutDuplicateSnippets(snippets, question)
+            snippets = snippets[:10]
+            if (len(snippets) == 0):
+                continue
+
+            cleanSnippetTokens = [set(preprocessText(s.snippet).split()) for s in snippets]
+
+            questionTopWords = set(top20QuestionWords)
+            answersTopWords = set(top20AnswersWords)
+
+            aveIntersectionWQuestion = averageSnippetIntersection(cleanSnippetTokens, questionTopWords, set(query.split(' ')))
+            aveIntersectionWAnswers = averageSnippetIntersection(cleanSnippetTokens, answersTopWords, set(query.split(' ')))
+            totalIntersectionWQuestion = totalSnippetIntersection(cleanSnippetTokens, questionTopWords, set(query.split(' ')))
+            totalIntersectionWAnswers = totalSnippetIntersection(cleanSnippetTokens, answersTopWords, set(query.split(' ')))
+
+            probeIntersections = {'query': query, 'aveWQuest':aveIntersectionWQuestion, 'aveWAns':aveIntersectionWAnswers, 'totWQuest':totalIntersectionWQuestion, 'totWAns':totalIntersectionWAnswers}
+            allProbesIntersections.append(probeIntersections)
+
+        questionIntersections = {'qid':question.qid, 'qtitle':question.qtitle, 'qbody':question.qbody, 'gtquery':question.gtquery, 'yahooqid':question.yahooqid, 'probes':allProbesIntersections}
+        intersectFile.write('%s\n' % json.dumps(questionIntersections))
+    intersectFile.close()
 
 # looks through the questions and answers and pick out distinct words and writes them in a file
 def exportDistinctWords():
@@ -247,6 +309,78 @@ def updateQueries():
                 fOut.write('%s\n' % json.dumps(jSnippet))
 
 
+def characterNGramSimilarity(outFilepath, N):
+    # for every question and every snippet look at how much they overlap using character n-grams
+    def constructNGramsForText(text, N):
+        return [text[i:i + N] for i in range(0, len(text) - N + 1)]
+
+    intersectFile = open(outFilepath, 'w')
+    sqlWiz = SQLWizard('Snippets.db')
+    questions = sqlWiz.getQuestions()
+
+    for question in questions:
+        answers = sqlWiz.getAnswersForQID(question.qid)
+
+        cleanQuestion = shrinkRepeatedChars(removePunctuation(' '.join([question.qtitle, question.qbody])))
+        cleanAnswers = [shrinkRepeatedChars(removePunctuation(a.answerText)) for a in answers]
+        # print(' '.join([question.qtitle, question.qbody]))
+        # print(cleanQuestion)
+
+        # input()
+        # for a in answers:
+            # print(a.answerText)
+
+        # for a in cleanAnswers:
+        #     print(a)
+
+        # input()
+
+        questionNGrams = set(constructNGramsForText(cleanQuestion, N))
+        # print(questionNGrams)
+        # input()
+        answersNGrams = [set(constructNGramsForText(a, N)) for a in cleanAnswers]
+        answersNGrams = set(itertools.chain(*answersNGrams))
+        # for a in answersNGrams:
+            # print(a)
+        # input()
+
+        # extract top words from question and compose queries
+        print('Extracting top question words...')
+        qtext = ' '.join([question.qtitle, question.qtitle, question.qbody])
+        top10QuestionWords = [item[0] for item in Keywords.keywordsNFromText(qtext, 10)]
+        print('Composing queries...')
+        queries = list(constructQueries(top10QuestionWords, 3, qtext))
+        queries.append(preprocessText(question.gtquery))
+        # print(queries)
+
+        allProbesIntersections = []
+
+        for query in queries:
+            print('Working with query :: ' + query)
+            snippets = sqlWiz.getNSnippetsForQuery(query, 10)
+            snippets = filterOutDuplicateSnippets(snippets, question)
+            snippets = snippets[:10]
+            if (len(snippets) == 0):
+                continue
+
+            cleanSnippets = [shrinkRepeatedChars(removePunctuation(s.snippet)) for s in snippets]
+            # for s in cleanSnippets:
+            #     print(s)
+            snippetsNgrams = [set(constructNGramsForText(s, N)) for s in cleanSnippets]
+            # print('Constructing ngrams')
+
+
+            aveIntersectionWQuestion = averageSnippetIntersection(snippetsNgrams, questionNGrams, set([]))
+            aveIntersectionWAnswers = averageSnippetIntersection(snippetsNgrams, answersNGrams, set([]))
+            totalIntersectionWQuestion = totalSnippetIntersection(snippetsNgrams, questionNGrams, set([]))
+            totalIntersectionWAnswers = totalSnippetIntersection(snippetsNgrams, answersNGrams, set([]))
+
+            probeIntersections = {'query': query, 'aveWQuest': aveIntersectionWQuestion, 'aveWAns': aveIntersectionWAnswers, 'totWQuest': totalIntersectionWQuestion, 'totWAns': totalIntersectionWAnswers}
+            allProbesIntersections.append(probeIntersections)
+
+        questionIntersections = {'qid': question.qid, 'qtitle': question.qtitle, 'qbody': question.qbody, 'gtquery': question.gtquery, 'yahooqid': question.yahooqid, 'probes': allProbesIntersections}
+        intersectFile.write('%s\n' % json.dumps(questionIntersections))
+    intersectFile.close()
 
 
 

@@ -3,7 +3,7 @@
 from KLDWizard import KLDWizard
 import Utils
 import json
-# from operator import itemgetter
+from operator import itemgetter
 import operator
 import numpy
 import itertools
@@ -70,6 +70,20 @@ def gtRankInDictionary(gtquery, scoredScoredProbes):
     return counter
 
 
+def topMWordsFromQueriesByOrder(queryTokens, M):
+    """Return a list of M words from the list."""
+    topMWords = []
+    for t in queryTokens:
+        if t not in topMWords:
+            topMWords.append(t)
+    return topMWords[:M]
+
+
+def topMWordsbyfrequency(queryTokens, M):
+    sortedTokensScored = sorted(KLDWizard.foregroundModel(queryTokens).items(), key=itemgetter(1), reverse=True)
+    sortedTokens = [item[0] for item in sortedTokensScored[:M]]
+    return sortedTokens
+
 # given partial intersections for a single query and weights(4 numbers tuple) find query score
 def queryScoreWithWeights(partialIntersections, weights):
     aveWAns = partialIntersections['aveWAns']
@@ -100,14 +114,15 @@ def scoreQueriesWithWeight(partialIntersectionsList, weights):
     return sortedScores
 
 
-def bestWeightsForQuestion(questionLine):
-    '''
-    questionLine is a json object, containing a question text, gtquery,
-    all probes abd their intersection scores
-    '''
+def bestWeightsForQuestion(questionline):
+    """
+    Question line is a json object, containing a question text, gtquery.
+
+    All probes abd their intersection scores.
+    """
     weights = allWeights()
 
-    question = json.loads(questionLine)
+    question = json.loads(questionline)
     gtquery = Utils.preprocessText(question['gtquery'])
     partialIntersections = question['probes']
 
@@ -118,11 +133,6 @@ def bestWeightsForQuestion(questionLine):
     sortedRanks = sorted(ranksWeightsMap.items(), key=operator.itemgetter(1))
     bestWeights = sortedRanks[0][0]
     return bestWeights
-
-# if __name__ == '__main__':
-
-#     inFilepath = 'intersections.txt'
-#     outFilepath = 'paramSweep.txt'
 
 
 def parameterSweep(inFilepath, outFilepath):
@@ -198,13 +208,13 @@ def precisionAtM(inFilepath, M):
         bestWeights = bestWeightsForQuestion(line)
 
         # Precision at M
-        gtQueryRank = gtqueryRankForWeights(partialIntersections, gtquery, bestWeights)
+        gtQueryRank = gtqueryRankForWeights(partialIntersections, gtquery, equalWeights)
         if gtQueryRank < M:
             pAtM += 1
 
         # Recall at M
         gttokens = set(gtquery.split(' '))
-        scoredTopQueries = scoreQueriesWithWeight(partialIntersections, bestWeights)[:M]
+        scoredTopQueries = scoreQueriesWithWeight(partialIntersections, equalWeights)[:M]
         topQueriesNoScores = [item[0] for item in scoredTopQueries]
         topQueriesTokens = [query.split(' ') for query in topQueriesNoScores]
         topQueriesUniqueTokens = set(itertools.chain.from_iterable(topQueriesTokens))
@@ -223,6 +233,123 @@ def precisionAtM(inFilepath, M):
     print('Total questions :: %d\n Precision at M :: %f' % (counter, pAtM))
     print('Total questions :: %d\n Recall at M :: %f' % (counter, recallAtM))
 
+
+# sort queries by their score, sort their tokens by frequency
+# calculate R@M, P@M
+def precisionAtMFreqTokens(inFilepath, M):
+    counter = 0
+
+    recallKLDSingleTitle = 0
+    recallKLDDoubleTitle = 0
+
+    recalRerankedOrderEqWeights = 0
+    recalRerankedFrequencyEqWeights = 0
+
+    recallRerankedOrderBestWeights = 0
+    recalRerankedFrequencyBestWeights = 0
+
+    lengths = []
+
+
+    for line in open(inFilepath):
+        counter += 1
+        question = json.loads(line)
+        qtitle = question['qtitle']
+        qbody = question['qbody']
+
+        qtextSingleTitle = ' '.join([qtitle, qbody])
+        lengths.append(len(qtextSingleTitle))
+        continue
+
+
+        gtquery = Utils.preprocessText(question['gtquery'])
+        gttokens = set(gtquery.split(' '))
+        partialIntersections = question['probes']
+
+        # KLD
+        qtextSingleTitle = ' '.join([qtitle, qbody])
+        KLDTokensSingleTitle = set([item[0] for item in keywordsNFromText(qtextSingleTitle, M)])
+        intersectionKLDSingle = len(KLDTokensSingleTitle.intersection(gttokens)) / len(gttokens)
+        recallKLDSingleTitle += intersectionKLDSingle
+        print('KLDTokensSingleTitle :: ' + str(KLDTokensSingleTitle))
+
+        qtextDoubleTitle = ' '.join([qtitle, qtitle, qbody])
+        KLDTokensDoubleTitle = set([item[0] for item in keywordsNFromText(qtextDoubleTitle, M)])
+        intersectionKLDDouble = len(KLDTokensDoubleTitle.intersection(gttokens)) / len(gttokens)
+        recallKLDDoubleTitle += intersectionKLDDouble
+        print('KLDTokensDoubleTitle :: ' + str(KLDTokensDoubleTitle))
+
+        # Reranked queries equal weights
+        equalWeights = (0.25, 0.25, 0.25, 0.25)
+        scoredTopQueries = scoreQueriesWithWeight(partialIntersections, equalWeights)[:M]
+        topQueriesTokens = [item[0].split(' ') for item in scoredTopQueries]
+        topQueriesFlatTokens = list(itertools.chain.from_iterable(topQueriesTokens))
+        topMWordsByOrder = set(topMWordsFromQueriesByOrder(topQueriesFlatTokens, M))
+        topMWordsByFrequency = set(topMWordsbyfrequency(topQueriesFlatTokens, M))
+
+        intersectionQueriesEqWeightsOrder = len(topMWordsByOrder.intersection(gttokens)) / len(gttokens)
+        intersectionQueriesEqWeightsFrequency = len(topMWordsByFrequency.intersection(gttokens)) / len(gttokens)
+        print('Equal weights topMWordsByOrder :: ' + str(topMWordsByOrder))
+        print('Equal weights topMWordsByFrequency :: ' + str(topMWordsByFrequency))
+
+        recalRerankedOrderEqWeights += intersectionQueriesEqWeightsOrder
+        recalRerankedFrequencyEqWeights += intersectionQueriesEqWeightsFrequency
+
+        # Reranked queriesbest weights
+        bestWeights = bestWeightsForQuestion(line)
+        scoredTopQueries = scoreQueriesWithWeight(partialIntersections, bestWeights)[:M]
+        topQueriesTokens = [item[0].split(' ') for item in scoredTopQueries]
+        topQueriesFlatTokens = list(itertools.chain.from_iterable(topQueriesTokens))
+        topMWordsByOrder = set(topMWordsFromQueriesByOrder(topQueriesFlatTokens, M))
+        topMWordsByFrequency = set(topMWordsbyfrequency(topQueriesFlatTokens, M))
+
+        intersectionQueriesBestWeightsOrder = len(topMWordsByOrder.intersection(gttokens)) / len(gttokens)
+        intersectionQueriesBestWeightsFrequency = len(topMWordsByFrequency.intersection(gttokens)) / len(gttokens)
+
+        print('Best weights topMWordsByOrder :: ' + str(topMWordsByOrder))
+        print('Best weights topMWordsByFrequency :: ' + str(topMWordsByFrequency))
+
+        recallRerankedOrderBestWeights += intersectionQueriesBestWeightsOrder
+        recalRerankedFrequencyBestWeights += intersectionQueriesBestWeightsFrequency
+
+        print('\n-----\n')
+
+        gtQueryRank = gtqueryRankForWeights(partialIntersections, gtquery, equalWeights)
+        print(gtQueryRank < M)
+
+        print('Qtitle :: ' + qtitle)
+        print('GTQuery :: ' + gtquery)
+        print('Intersection at KLD single title :: %f' % intersectionKLDSingle)
+        print('Intersection at KLD double title :: %f' % intersectionKLDDouble)
+
+        print('Intersection reranked queries equal weights by order :: %f' % intersectionQueriesEqWeightsOrder)
+        print('Intersection reranked queries equal weights by frequency :: %f' % intersectionQueriesEqWeightsFrequency)
+
+        print('Intersection reranked queries best weights by order :: %f' % intersectionQueriesBestWeightsOrder)
+        print('Intersection reranked queries best weights by frequency :: %f' % recalRerankedFrequencyBestWeights)
+
+        print('\n***\n')
+
+    print(lengths)
+    print(sum(lengths) / len(lengths))
+
+    # recallKLDSingleTitle /= counter
+    # recallKLDDoubleTitle /= counter
+    # recalRerankedOrderEqWeights /= counter
+    # recalRerankedFrequencyEqWeights /= counter
+    # recallRerankedOrderBestWeights /= counter
+    # recalRerankedFrequencyBestWeights /= counter
+
+
+    # print('Total questions :: %d' % counter)
+    # print('recallKLDSingleTitle :: %f' % recallKLDSingleTitle)
+    # print('recallKLDDoubleTitle :: %f' % recallKLDDoubleTitle)
+    # print('recalRerankedOrderEqWeights :: %f' % recalRerankedOrderEqWeights)
+    # print('recalRerankedFrequencyEqWeights :: %f' % recalRerankedFrequencyEqWeights)
+    # print('recallRerankedOrderBestWeights :: %f' % recallRerankedOrderBestWeights)
+    # print('recalRerankedFrequencyBestWeights :: %f' % recalRerankedFrequencyBestWeights)
+
+    print('\n***\n')
 
 
 
