@@ -77,26 +77,108 @@ def constructQueries(tokens, queryLength, rawQuestion):
                 newQueries[qq] = max(q[1], i)
         return newQueries
 
+
     # order tokens the same way they appear in the question
     def sortTokens(tokensToSort, rawQuestion):
-        questionTokens = preprocessText(rawQuestion).split(' ')
-        sortedTokens = []
-        for t in questionTokens:
-            if (t in tokensToSort) and (t not in sortedTokens):
-                sortedTokens.append(t)
+        # for every token find its first occurence in the initial string
+        # then sort based on these indecies
+        tokensInd = {}
+        for t in tokensToSort:
+            if t not in tokensInd.keys():
+                tokensInd = rawQuestion.find(t)
+        sortedInd = sorted(tokensInd.items(), key=operator.itemgetter(1))
+        sortedTokens = [i[0] for i in sortedInd]
+
         return sortedTokens
+
+    # find collocations and glue them together as a single token
+    # TODO: add answers text here as well?
+    def findCollocations(rawQuestion):
+        # split the question into blocks by punctuation marks
+        # blocks = [b.strip() for b in re.split('[^0-9A_Za-x\s]+', rawQuestion) if b.strip() != '']
+        # Example:
+        # blocks : ['why is my 5 month old pit bull puppy eating rocks',
+        # 'my dog is very active and has a really good appetite',
+        # 'she loves to play and is very well mannered',
+        # 'lately she has been eating small pea gravel from my landscaping',
+        # 'is she just being a puppy or is something wrong']
+        blocks = [b.strip() for b in re.split('[.,\?\!\-\:\;\(\)\{\}\[\]]+', rawQuestion) if b.strip() != '']
+
+        # for each block tokens. blocksTokens = List[List[Str]]
+        # Example:
+        # blocksTokens: [['month', 'old', 'pit', 'bull', 'puppy', 'eating', 'rock'],
+        # ['dog', 'active', 'good', 'appetite'],
+        # ['love', 'play', 'mannered'],
+        # ['lately', 'eating', 'small', 'pea', 'gravel', 'landscaping'],
+        # ['puppy', 'wrong']]
+        blocksTokens = [preprocessText(b).split() for b in blocks]
+
+        # compose bigrams. blocksBigrams = List[List[Str]]
+        # Example:
+        # blocksBigrams: [['month old',
+        #  'old pit',
+        #  'pit bull',
+        #  'bull puppy',
+        #  'puppy eating',
+        #  'eating rock'],
+        # ['dog active', 'active good', 'good appetite'],
+        # ['love play', 'play mannered'],
+        # ['lately eating',
+        #  'eating small',
+        #  'small pea',
+        #  'pea gravel',
+        #  'gravel landscaping'],
+        # ['puppy wrong']]
+        N = 2
+        blocksBigrams = [[' '.join(tokens[i: i + N]) for i in range(0, len(tokens) - N + 1)] for tokens in blocksTokens]
+
+        # flatten previous list of lists to a single list of strings
+        # Example:
+        # flatBigrams : ['month old',
+        # 'old pit',
+        # 'pit bull',
+        # 'bull puppy',
+        # 'puppy eating',
+        # 'eating rock',
+        # 'dog active',
+        # 'active good',
+        # 'good appetite',
+        # 'love play',
+        # 'play mannered',
+        # 'lately eating',
+        # 'eating small',
+        # 'small pea',
+        # 'pea gravel',
+        # 'gravel landscaping',
+        # 'puppy wrong']
+        flatBigrams = list(itertools.chain.from_iterable(blocksBigrams))
+
+        # find repetitive bigrams
+        freqBigrams = {}
+        for b in flatBigrams:
+            if b in freqBigrams.keys():
+                freqBigrams[b] += 1
+            else:
+                freqBigrams[b] = 1
+        repBigrams = [b[0] for b in freqBigrams.items() if b[1] > 1]
+        return repBigrams
+
 
     queriesOfLengths = {}
     queries = {}
 
+    # sort tokens in order of their occurence in the initial question
+    tokens += findCollocations(rawQuestion)
+    sortedTokens = sortTokens(tokens, rawQuestion)
+
     # start by creating all single word queries
-    for i in range(0, len(tokens)):
-        queries[tokens[i]] = i
+    for i in range(0, len(sortedTokens)):
+        queries[sortedTokens[i]] = i
     queriesOfLengths[1] = queries.keys()
 
     # append one word to existing queries
     for i in range(1, queryLength):
-        queries = addOne(queries, tokens)
+        queries = addOne(queries, sortedTokens)
         queriesOfLengths[i + 1] = queries.keys()
 
     return queriesOfLengths[queryLength]
@@ -133,7 +215,7 @@ def totalSnippetIntersection(snippetTokensSet, topWordsSet, queryTokensSet):
     allSnippetsTokensSet.difference_update(queryTokensSet)
     intersection = allSnippetsTokensSet.intersection(topWordsSet)
     result = len(intersection) / len(allSnippetsTokensSet)
-    print(result)
+    # print(result)
     return result
 
 
@@ -181,6 +263,7 @@ def loadLinesFromTextToList(filePath):
 
 # calculate intersections of words
 def calcIntersections():
+    missingQueries = open('NoBadAnswers/missingQueries.txt', 'w')
     intersectFile = open('NoBadAnswers/intersectionsWords.txt', 'w')
     sqlWiz = SQLWizard('Snippets.db')
     kldWiz = KLDWizard()
@@ -213,7 +296,8 @@ def calcIntersections():
             snippets = sqlWiz.getNSnippetsForQuery(query, -1)
             snippets = filterOutDuplicateSnippets(snippets, question)
             snippets = snippets[:10]
-            if (len(snippets) == 0):
+            if (len(snippets) < 10):
+                missingQueries.write('%s\n' % query)
                 continue
 
             cleanSnippetTokens = [set(preprocessText(s.snippet).split()) for s in snippets]
@@ -241,6 +325,7 @@ def calcIntersections():
                                  'yahooqid': question.yahooqid, 'probes': allProbesIntersections}
         intersectFile.write('%s\n' % json.dumps(questionIntersections))
     intersectFile.close()
+    missingQueries.close()
 
 
 # looks through the questions and answers and pick out distinct words and writes them in a file

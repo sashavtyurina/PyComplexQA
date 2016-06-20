@@ -108,6 +108,7 @@ day
 do
 does
 doesnt
+doesn't
 doing
 didnt
 dont
@@ -365,6 +366,9 @@ thereto
 thereupon
 these
 they
+they'll
+they've
+they're
 this
 those
 thou

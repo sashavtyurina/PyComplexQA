@@ -5,6 +5,7 @@ class KLDWizard:
     # class that will help figure out word frequencies and KL divergence
 
     wordProbabilities = {}
+
     def __init__(self):
 
         # load the word frequencies
@@ -16,8 +17,9 @@ class KLDWizard:
             totalWords = int(totalWords)
 
 
-            self.wordProbabilities[word] = (frequency*1.0)/(totalWords*1.0)
+            self.wordProbabilities[word] = (frequency * 1.0) / (totalWords * 1.0)
             self.totalWordsClueweb = totalWords
+
 
     # calculates KL divergence of a single word
     def wordKLD(self, word, foregroundProbability):
@@ -31,8 +33,8 @@ class KLDWizard:
 
         # kl divergence is not defined
         if Q == 0:
-            Q = 1/self.totalWordsClueweb
-        return P * math.log(P/Q)
+            Q = 1 / self.totalWordsClueweb
+        return P * math.log(P / Q)
 
 
     # returns a list of N words with the highest KLD score
