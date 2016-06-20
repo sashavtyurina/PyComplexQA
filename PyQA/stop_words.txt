@@ -21,11 +21,17 @@
 i've
 i'm
 i'd
+i'll
 you've
 you're
 you'd
+you'll
 he's
+he'll
+he'd
+she'll
 she's
+she'd
 ve
 n't
 a
@@ -105,6 +111,7 @@ doesnt
 doing
 didnt
 dont
+don't
 dost
 doth
 double
@@ -200,8 +207,10 @@ into
 inward
 inwards
 is
+isn't
 it
 its
+it's
 itself
 just
 kind
@@ -257,6 +266,7 @@ of
 off
 often
 ok
+okay
 on
 once
 one

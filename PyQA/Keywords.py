@@ -13,6 +13,7 @@ kldWiz = KLDWizard()
 
 def keywordsNFromText(text, N):
     tokens = Utils.preprocessText(text).split(' ')
+    print('Tokens :: ' + str(tokens))
     return kldWiz.topNWordsFromTokens(tokens, N)
 
 

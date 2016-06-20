@@ -3,9 +3,10 @@ import re
 import sqlite3
 from itertools import permutations
 import itertools
-import Keywords
+from Keywords import *
 from SQLWizard import SQLWizard
 from KLDWizard import KLDWizard
+
 
 # removes punctuations from the string
 def removePunctuation(str):
@@ -15,25 +16,30 @@ def removePunctuation(str):
     str = re.sub("'(?![A-Za-z\d])", ' ', str)
     return str
 
+
 # replaces 3 or more repeated chars with a single one
 def shrinkRepeatedChars(str):
     cleanStr = re.sub(r'(.)\1{2,}', '\g<1>', str)
     cleanStr = re.sub(r'\s{2,}', ' ', cleanStr)
     return cleanStr
 
+
 # removes tokens shorter than minLength
 def removeShortTokens(tokens, minLength):
     return [t for t in tokens if not len(t) < minLength]
+
 
 # removes stop words from the list of tokens
 def dropStopWords(tokens):
     stopWords = [w.strip() for w in open('stop_words.txt')]
     return [t for t in tokens if t not in stopWords]
 
+
 # replaces URLs with the domain name
 def removeURLs(str):
     # return re.sub(r'https?:\/\/([^\/]+)[^\s]*\s', '\g<1>', str)
     return re.sub(r'https?://([^\/]+)\.[^\s]*\s', '\g<1> ', str)
+
 
 # performs s stemming of the list of tokens
 def s_stemmer(tokens):
@@ -47,6 +53,7 @@ def s_stemmer(tokens):
         return word
     return [s_stem(t) for t in tokens]
 
+
 # performs text cleaning. Use this to do all the text cleaning
 def preprocessText(text):
     text = removeURLs(text)
@@ -57,6 +64,7 @@ def preprocessText(text):
     tokens = s_stemmer(tokens)
     tokens = removeShortTokens(tokens, 2)
     return ' '.join(tokens)
+
 
 # given a list of tokens, return all queries of length queryLength
 # also requires question text to put the tokens in the queries the same order as they were in the question
@@ -93,6 +101,7 @@ def constructQueries(tokens, queryLength, rawQuestion):
 
     return queriesOfLengths[queryLength]
 
+
 def averageSnippetIntersection(snippetTokensSets, topWordsSet, queryTokensSet):
     intersections = []
     # print('Top words :: ' + str(topWordsSet))
@@ -118,13 +127,15 @@ def averageSnippetIntersection(snippetTokensSets, topWordsSet, queryTokensSet):
     # print(result)
     return result
 
+
 def totalSnippetIntersection(snippetTokensSet, topWordsSet, queryTokensSet):
     allSnippetsTokensSet = set(itertools.chain(*snippetTokensSet))
     allSnippetsTokensSet.difference_update(queryTokensSet)
     intersection = allSnippetsTokensSet.intersection(topWordsSet)
-    result = len(intersection)/len(allSnippetsTokensSet)
+    result = len(intersection) / len(allSnippetsTokensSet)
     print(result)
     return result
+
 
 def scoreQuery(query, snippets, answersTopWords, questionTopWords, weights):
     cleanSnippetTokens = [set(preprocessText(s.snippet).split()) for s in snippets]
@@ -137,9 +148,10 @@ def scoreQuery(query, snippets, answersTopWords, questionTopWords, weights):
     totalIntersectionWQuestion = totalSnippetIntersection(cleanSnippetTokens, questionTopWords)
     totalIntersectionWAnswers = totalSnippetIntersection(cleanSnippetTokens, answersTopWords)
 
-    score = weights[0]*aveIntersectionWQuestion + weights[1]*aveIntersectionWAnswers + weights[2]*totalIntersectionWQuestion + weights[3]*totalIntersectionWAnswers
+    score = weights[0] * aveIntersectionWQuestion + weights[1] * aveIntersectionWAnswers + weights[2] * totalIntersectionWQuestion + weights[3] * totalIntersectionWAnswers
 
     return score
+
 
 # given a list of snippets remove the ones that were retrieved from the same page as the question (compare yahooqid)
 # and also remove the ones that look too similar to the question (more than 50% of snippet terms are in the question)
@@ -150,14 +162,14 @@ def filterOutDuplicateSnippets(snippets, question):
             continue
         snippetTokens = set(preprocessText(s.snippet).split(' '))
         questionTokens = set(preprocessText(' '.join([question.qtitle, question.qbody])).split(' '))
-        intersectionFraction = len(snippetTokens.intersection(questionTokens))/len(snippetTokens)
+        intersectionFraction = len(snippetTokens.intersection(questionTokens)) / len(snippetTokens)
         if intersectionFraction > 0.5:
             continue
         cleanSnippets.append(s)
     return cleanSnippets
 
 
-### MISC UTILITIES
+# MISC UTILITIES
 def loadLinesFromTextToList(filePath):
     gtqueries = []
     for line in open(filePath):
@@ -165,11 +177,11 @@ def loadLinesFromTextToList(filePath):
     return gtqueries
 
 
-### ONE TIME FUNCTIONS
+# ONE TIME FUNCTIONS
 
-# calculate intersections
+# calculate intersections of words
 def calcIntersections():
-    intersectFile = open('intersections.txt', 'w')
+    intersectFile = open('NoBadAnswers/intersectionsWords.txt', 'w')
     sqlWiz = SQLWizard('Snippets.db')
     kldWiz = KLDWizard()
     questions = sqlWiz.getQuestions()
@@ -180,6 +192,7 @@ def calcIntersections():
         print('Extracting top answer words...')
         answers = sqlWiz.getAnswersForQID(question.qid)
         top20AnswersWords = [item[0] for item in keywordsFromAnswers(answers, 20)]
+        # TODO: all answer words?
 
         # extract top words from question
         print('Extracting top question words...')
@@ -188,6 +201,7 @@ def calcIntersections():
 
         # compose queries
         print('Composing queries...')
+        # TODO: glue collocations together to form a single token
         top10QuestionWords = top20QuestionWords[:10]
         queries = list(constructQueries(top10QuestionWords, 3, qtext))
         queries.append(preprocessText(question.gtquery))
@@ -203,21 +217,31 @@ def calcIntersections():
                 continue
 
             cleanSnippetTokens = [set(preprocessText(s.snippet).split()) for s in snippets]
+            # TODO look for collocations from q and a, give them bigger weights
 
             questionTopWords = set(top20QuestionWords)
             answersTopWords = set(top20AnswersWords)
 
-            aveIntersectionWQuestion = averageSnippetIntersection(cleanSnippetTokens, questionTopWords, set(query.split(' ')))
-            aveIntersectionWAnswers = averageSnippetIntersection(cleanSnippetTokens, answersTopWords, set(query.split(' ')))
-            totalIntersectionWQuestion = totalSnippetIntersection(cleanSnippetTokens, questionTopWords, set(query.split(' ')))
-            totalIntersectionWAnswers = totalSnippetIntersection(cleanSnippetTokens, answersTopWords, set(query.split(' ')))
+            aveIntersectionWQuestion = averageSnippetIntersection(cleanSnippetTokens, questionTopWords,
+                                                                  set(query.split(' ')))
+            aveIntersectionWAnswers = averageSnippetIntersection(cleanSnippetTokens, answersTopWords,
+                                                                 set(query.split(' ')))
+            totalIntersectionWQuestion = totalSnippetIntersection(cleanSnippetTokens, questionTopWords,
+                                                                  set(query.split(' ')))
+            totalIntersectionWAnswers = totalSnippetIntersection(cleanSnippetTokens, answersTopWords,
+                                                                 set(query.split(' ')))
 
-            probeIntersections = {'query': query, 'aveWQuest':aveIntersectionWQuestion, 'aveWAns':aveIntersectionWAnswers, 'totWQuest':totalIntersectionWQuestion, 'totWAns':totalIntersectionWAnswers}
+            probeIntersections = {'query': query, 'aveWQuest': aveIntersectionWQuestion,
+                                  'aveWAns': aveIntersectionWAnswers, 'totWQuest': totalIntersectionWQuestion,
+                                  'totWAns': totalIntersectionWAnswers}
             allProbesIntersections.append(probeIntersections)
 
-        questionIntersections = {'qid':question.qid, 'qtitle':question.qtitle, 'qbody':question.qbody, 'gtquery':question.gtquery, 'yahooqid':question.yahooqid, 'probes':allProbesIntersections}
+        questionIntersections = {'qid': question.qid, 'qtitle': question.qtitle,
+                                 'qbody': question.qbody, 'gtquery': question.gtquery,
+                                 'yahooqid': question.yahooqid, 'probes': allProbesIntersections}
         intersectFile.write('%s\n' % json.dumps(questionIntersections))
     intersectFile.close()
+
 
 # looks through the questions and answers and pick out distinct words and writes them in a file
 def exportDistinctWords():
@@ -236,12 +260,13 @@ def exportDistinctWords():
 
     with open('distinctWordsQA.txt', 'a') as f:
         for w in distinctWords:
-            f.write('%s\n' %w)
+            f.write('%s\n' % w)
+
 
 # exports all snippets to a text file. each row as a separate json
 def exportSnippetsFromDB():
     connection = sqlite3.connect('KeywordRankingDB.db')
-    connection.text_factory = lambda x: str(x, 'latin1') # taking care of the encoding
+    connection.text_factory = lambda x: str(x, 'latin1')  # taking care of the encoding
     print('Connected to DB')
     sql = 'select questID, queryText, docURL, snippet from AllSnippets;'
     cursor = connection.execute(sql)
@@ -252,11 +277,13 @@ def exportSnippetsFromDB():
                     queryText = row[1]
                     docURL = row[2]
                     snippet = row[3]
-                    jsonRow = json.dumps({'questID':questID, 'queryText': queryText, 'docURL': docURL, 'snippet': snippet})
+                    jsonRow = json.dumps({'questID': questID, 'queryText': queryText,
+                                          'docURL': docURL, 'snippet': snippet})
                     fOut.write('%s\n' % jsonRow)
                 except sqlite3.OperationalError:
                     print(row)
                     continue
+
 
 # imports questions from text file to a db
 def importQuestionsFromText():
@@ -279,6 +306,7 @@ def importQuestionsFromText():
     connection.commit()
     connection.close()
 
+
 # import snippets from text file to a db
 def importSnippetsFromText(pathToFile):
     connection = sqlite3.connect('Snippets.db')
@@ -294,6 +322,7 @@ def importSnippetsFromText(pathToFile):
         cursor.execute(sql, (query, docURL, snippet))
     connection.commit()
     connection.close()
+
 
 # make sure that words in queries are in the same order as in the question
 def updateQueries():
@@ -375,14 +404,39 @@ def characterNGramSimilarity(outFilepath, N):
             totalIntersectionWQuestion = totalSnippetIntersection(snippetsNgrams, questionNGrams, set([]))
             totalIntersectionWAnswers = totalSnippetIntersection(snippetsNgrams, answersNGrams, set([]))
 
-            probeIntersections = {'query': query, 'aveWQuest': aveIntersectionWQuestion, 'aveWAns': aveIntersectionWAnswers, 'totWQuest': totalIntersectionWQuestion, 'totWAns': totalIntersectionWAnswers}
+            probeIntersections = {'query': query, 'aveWQuest': aveIntersectionWQuestion,
+                                  'aveWAns': aveIntersectionWAnswers, 'totWQuest': totalIntersectionWQuestion,
+                                  'totWAns': totalIntersectionWAnswers}
             allProbesIntersections.append(probeIntersections)
 
-        questionIntersections = {'qid': question.qid, 'qtitle': question.qtitle, 'qbody': question.qbody, 'gtquery': question.gtquery, 'yahooqid': question.yahooqid, 'probes': allProbesIntersections}
+        questionIntersections = {'qid': question.qid, 'qtitle': question.qtitle, 'qbody': question.qbody,
+                                 'gtquery': question.gtquery, 'yahooqid': question.yahooqid,
+                                 'probes': allProbesIntersections}
         intersectFile.write('%s\n' % json.dumps(questionIntersections))
     intersectFile.close()
 
 
+def findMisspelledWords(outputFilename):
+    dictionaryFile = 'en_CA.txt'
+    sqlWiz = SQLWizard('Snippets.db')
+    questions = sqlWiz.getQuestions()
+    dictionaryWords = [w.strip() for w in open(dictionaryFile)]
+    misspelledTokens = set()
+    allTokens = []
 
+    for question in questions:
+        answers = sqlWiz.getAnswersForQID(question.qid)
 
+        cleanQuestion = preprocessText(' '.join([question.qtitle, question.qbody])).split()
+        cleanAnswers = list(itertools.chain(*[preprocessText(a.answerText) for a in answers]))
+        allTokens += cleanQuestion + cleanAnswers
 
+    tokensSet = set(allTokens)
+
+    for token in tokensSet:
+        if token not in dictionaryWords:
+            misspelledTokens.add(token)
+
+    with open(outputFilename, 'w') as f:
+        for t in misspelledTokens:
+            f.write('%s\n' % t)

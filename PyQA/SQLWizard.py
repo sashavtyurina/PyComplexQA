@@ -1,4 +1,5 @@
 import sqlite3
+import json
 from QAS import *
 
 class SQLWizard:
@@ -57,5 +58,24 @@ class SQLWizard:
 
         connection.close()
         return snippets
+
+    # exports all questions from the DB to a JSON file
+    def exportQuestionsToJSON(self, filename):
+        with open(filename, 'w') as f:
+            questions = self.getQuestions()
+            for q in questions:
+                jsonObj = json.dumps({'qid': q.qid, 'qtitle': q.qtitle, 'qbody': q.qbody,
+                                      'gtquery': q.gtquery, 'yahooqid': q.yahooqid})
+                f.write('%s\n' % str(jsonObj))
+
+    def importQuestionsFromJSON(self, filename):
+        sql = 'insert into questions (qid, qtitle, qbody, gtquery, yahooqid) values (?, ?, ?, ?, ?)'
+        connection = sqlite3.connect(self.dbPath)
+        for line in open(filename):
+            q = json.loads(line.strip())
+            connection.execute(sql, (q['qid'], q['qtitle'], q['qbody'], q['gtquery'], q['yahooqid']))
+
+        connection.commit()
+        connection.close()
 
 
