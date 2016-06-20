@@ -73,8 +73,10 @@ def constructQueries(tokens, queryLength, rawQuestion):
         newQueries = {}
         for q in queries.items():
             for i in range(q[1] + 1, len(tokens)):
-                qq = ' '.join([q[0], tokens[i]])
-                newQueries[qq] = max(q[1], i)
+                # check if these tokens (or bigrams) overlap
+                if len(set(q[0].split()).intersection(set(tokens[i].split()))) == 0:
+                    qq = ' '.join([q[0], tokens[i]])
+                    newQueries[qq] = max(q[1], i)
         return newQueries
 
 
@@ -85,11 +87,16 @@ def constructQueries(tokens, queryLength, rawQuestion):
         tokensInd = {}
         for t in tokensToSort:
             if t not in tokensInd.keys():
-                tokensInd = rawQuestion.find(t)
+                ind = rawQuestion.find(t)
+                if ind == -1:
+                    ind = rawQuestion.find(t[:-1])
+                tokensInd[t] = ind
+        print(tokensInd)
         sortedInd = sorted(tokensInd.items(), key=operator.itemgetter(1))
         sortedTokens = [i[0] for i in sortedInd]
 
         return sortedTokens
+
 
     # find collocations and glue them together as a single token
     # TODO: add answers text here as well?
@@ -160,7 +167,9 @@ def constructQueries(tokens, queryLength, rawQuestion):
                 freqBigrams[b] += 1
             else:
                 freqBigrams[b] = 1
+        # print('Freq bigrams ' + str(freqBigrams))
         repBigrams = [b[0] for b in freqBigrams.items() if b[1] > 1]
+        print('Found collocations: ' + str(repBigrams))
         return repBigrams
 
 
@@ -168,8 +177,12 @@ def constructQueries(tokens, queryLength, rawQuestion):
     queries = {}
 
     # sort tokens in order of their occurence in the initial question
+    # print('Found collocations: ' + str(findCollocations(rawQuestion)))
     tokens += findCollocations(rawQuestion)
     sortedTokens = sortTokens(tokens, rawQuestion)
+
+    print('raw question :: ' + str(rawQuestion))
+    print('sorted tokens :: ' + str(sortedTokens))
 
     # start by creating all single word queries
     for i in range(0, len(sortedTokens)):
@@ -181,6 +194,7 @@ def constructQueries(tokens, queryLength, rawQuestion):
         queries = addOne(queries, sortedTokens)
         queriesOfLengths[i + 1] = queries.keys()
 
+    print('queries :: ' + str(queriesOfLengths[queryLength]))
     return queriesOfLengths[queryLength]
 
 
@@ -261,13 +275,47 @@ def loadLinesFromTextToList(filePath):
 
 # ONE TIME FUNCTIONS
 
+# after making some fixes, find which queries are missing, put them in a sepaarte file.
+def extractMissingQueries():
+    missingQueries = open('NoBadAnswers/MissingQueries.txt', 'a')
+    sqlWiz = SQLWizard('Snippets.db')
+    questions = sqlWiz.getQuestions()
+    skipQuestions = 12
+
+    for question in questions:
+        if skipQuestions != 0:
+            skipQuestions -= 1
+            continue
+
+        qtext = ' '.join([question.qtitle, question.qtitle, question.qbody])
+        top20QuestionWords = [item[0] for item in keywordsNFromText(qtext, 20)]
+
+        # compose queries
+        print('Composing queries...')
+        # TODO: glue collocations together to form a single token
+        top10QuestionWords = top20QuestionWords[:10]
+        queries = list(constructQueries(top10QuestionWords, 3, ' '.join([question.qtitle, question.qbody])))
+        queries.append(preprocessText(question.gtquery))
+
+        for query in queries:
+            print('Working with query :: ' + query)
+            snippets = sqlWiz.getNSnippetsForQuery(query, -1)
+            snippets = filterOutDuplicateSnippets(snippets, question)
+            if (len(snippets) < 10):
+                missingQueries.write('%s\n' % query)
+                print(query + " -- missing")
+                continue
+    missingQueries.close()
+
+
 # calculate intersections of words
 def calcIntersections():
-    missingQueries = open('NoBadAnswers/missingQueries.txt', 'w')
+    missingQueries = open('NoBadAnswers/missingQueries.txt', 'a')
     intersectFile = open('NoBadAnswers/intersectionsWords.txt', 'w')
     sqlWiz = SQLWizard('Snippets.db')
-    kldWiz = KLDWizard()
     questions = sqlWiz.getQuestions()
+
+
 
     for question in questions:
 

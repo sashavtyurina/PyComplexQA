@@ -9,6 +9,7 @@ from Keywords import *
 
 
 def main():
+    extractMissingQueries()
     # sqlWiz = SQLWizard('Snippets.db')
     # questions = sqlWiz.getQuestions()
     # for q in questions:
@@ -19,8 +20,8 @@ def main():
     # calcIntersections();
     # characterNGramSimilarity('char3GramsGoogAnsOnly.txt', 3)
     # # findMisspelledWords('misspelled.txt')
-    # print('done')
-    # input()
+    print('done')
+    input()
 
 
     # M = 7
