@@ -1,6 +1,6 @@
 # ACCOUNT_KEY = '/Mf56CFpuSUUQKdutUsoquPduXPWJBjflVKxHC3GQAk' # sasha.vtyurina account
-ACCOUNT_KEY = 'yxckQrsJG08opmtaZroAT9hMrAiD6CBgxK/NbWYFQns=' # mal.raynolds account
-# ACCOUNT_KEY = '7ntaEOCRdOwFmQQg3NkTfwv/g+xfo2ZCHnxnMvpFdnQ' # ross.thedivorcer@outlook.com
+# ACCOUNT_KEY = 'yxckQrsJG08opmtaZroAT9hMrAiD6CBgxK/NbWYFQns=' # mal.raynolds account
+ACCOUNT_KEY = '7ntaEOCRdOwFmQQg3NkTfwv/g+xfo2ZCHnxnMvpFdnQ' # ross.thedivorcer@outlook.com
 # ACCOUNT_KEY = 'mTrHvU3N4LLH6yl2RvjAJpkqhRG++wf7Jl4IjU8VN6w' # monica.velula.geller@outlook.com
 TOP_DOC = 10
 import bing
@@ -49,9 +49,10 @@ def ask_bing(query, filename):
 #                 newFilename = mypath + ff[0:ff.index(".txt")] + "SearchResults.txt"
 #                 ask_bing(line, newFilename, questID)
 
+
 def main():
-    infile = 'absentQueries1.txt'
-    outfile = 'absentQueries2SearchResults.txt'
+    infile = 'NoBadAnswers/MissingQueriesContinue.txt'
+    outfile = 'NoBadAnswers/MissingQueriesSearchResult.txt'
     counter = 0
     with open(infile) as f:
         for line in f:

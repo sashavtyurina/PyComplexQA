@@ -1,15 +1,37 @@
-"""A."""
-import Utils
+"""
+Select questions from WebScope dataset.
+
+Read xml file with WebScope questions and their answers.
+Select questions that satisfy our conditions (using goodQuestion function).
+Save all selected questions to a text file in JSON format.
+"""
+
 from xml.etree.cElementTree import iterparse
 import json
+
+
+# this predicate function returns true if we want to consider this question
+def goodQuestion(qtitle, qbody, bestanswer, answers, existingQuestions):
+    if qtitle in existingQuestions:
+        return False
+    qtext = qtitle.strip() + qbody.strip()
+    return (len(qtext) >= 150) and (len(answers) >= 3)
+
+
 qtitle = ''
 qbody = ''
 qlang = ''
 bestanswer = ''
 answers = []
-# lengths = [
-with open('smallSampleText.txt', 'w') as out:
-    source = 'small_sample.xml'
+questionCount = 500
+
+existingQuestions = []
+for line in open('questions.txt'):
+    q = json.loads(line.strip())
+    existingQuestions.append(q['qtitle'])
+
+with open('SelectedQuestions.txt', 'w') as out:
+    source = 'FullOct2007.xml'
     # source = 'small_sample.xml'
     context = iterparse(source, events=("start", "end"))
     context = iter(context)
@@ -35,12 +57,18 @@ with open('smallSampleText.txt', 'w') as out:
                 continue
             if qlang != 'en':
                 continue
-            jsonQ = json.dumps({'qtitle': qtitle, 'qbody': qbody, 'bestanswer': bestanswer, 'answers': answers})
-            out.write('%s\n' % str(jsonQ))
-            # lengths.append(len(Utils.preprocessText(qtitle + ' ' + qbody).split(' ')))
+            if goodQuestion(qtitle, qbody, bestanswer, answers, existingQuestions):
+                jsonQ = json.dumps({'qtitle': qtitle, 'qbody': qbody,
+                                    'bestanswer': bestanswer, 'answers': answers})
+                out.write('%s\n' % str(jsonQ))
+                questionCount -= 1
+                if questionCount == 0:
+                    break
+
             qtitle = ''
             qbody = ''
             bestanswer = ''
+            qlang = ''
             answers = []
             root.clear()
 

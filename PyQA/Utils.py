@@ -265,6 +265,24 @@ def filterOutDuplicateSnippets(snippets, question):
     return cleanSnippets
 
 
+# rerank words from queries by their score
+# given a list of scored queries, calculate the reranking of the query words
+# each word would have a score of a sum of all queries it is in
+def rerankQueryWordsWithScores(scoredQueries):
+    wordsScores = {}
+    for s in scoredQueries:
+        queryText = s[0]
+        queryScore = s[1]
+        words = queryText.split()
+        for w in words:
+            if w in wordsScores.keys():
+                wordsScores[w] += queryScore
+            else:
+                wordsScores[w] = queryScore
+    sortedWordsScores = sorted(wordsScores.items(), key=operator.itemgetter(1), reverse=True)
+    return sortedWordsScores
+
+
 # MISC UTILITIES
 def loadLinesFromTextToList(filePath):
     gtqueries = []
@@ -310,8 +328,8 @@ def extractMissingQueries():
 
 # calculate intersections of words
 def calcIntersections():
-    missingQueries = open('NoBadAnswers/missingQueries.txt', 'a')
-    intersectFile = open('NoBadAnswers/intersectionsWords.txt', 'w')
+    missingQueries = open('NoBadAnswers/missingQueries2.txt', 'w')
+    intersectFile = open('NoBadAnswers/intersectionsWordsFixedTyposBigrams.txt', 'w')
     sqlWiz = SQLWizard('Snippets.db')
     questions = sqlWiz.getQuestions()
 
@@ -334,7 +352,7 @@ def calcIntersections():
         print('Composing queries...')
         # TODO: glue collocations together to form a single token
         top10QuestionWords = top20QuestionWords[:10]
-        queries = list(constructQueries(top10QuestionWords, 3, qtext))
+        queries = list(constructQueries(top10QuestionWords, 3, ' '.join([question.qtitle, question.qbody])))
         queries.append(preprocessText(question.gtquery))
         print(queries)
 
@@ -449,7 +467,7 @@ def importSnippetsFromText(pathToFile):
         jSnippet = json.loads(line.strip())
         query = preprocessText(jSnippet['queryText'].lower())
         print(query)
-        docURL = jSnippet['docURL']
+        docURL = jSnippet['url']
         snippet = jSnippet['snippet']
         sql = 'insert into snippets (querytext, docurl, snippet) values (?, ?, ?);'
         cursor.execute(sql, (query, docURL, snippet))

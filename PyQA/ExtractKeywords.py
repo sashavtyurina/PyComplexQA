@@ -9,7 +9,8 @@ from Keywords import *
 
 
 def main():
-    extractMissingQueries()
+    # Utils.importSnippetsFromText('NoBadAnswers/MissingQueriesSearchResult.txt')
+    # extractMissingQueries()
     # sqlWiz = SQLWizard('Snippets.db')
     # questions = sqlWiz.getQuestions()
     # for q in questions:
@@ -17,11 +18,11 @@ def main():
     #     print('\n'.join([w[0] + ' ' + str(w[1]) for w in words]))
     #     print('\n**********\n')
 
-    # calcIntersections();
+    # calcIntersections()
     # characterNGramSimilarity('char3GramsGoogAnsOnly.txt', 3)
     # # findMisspelledWords('misspelled.txt')
-    print('done')
-    input()
+    # print('done')
+    # input()
 
 
     # M = 7
@@ -31,9 +32,9 @@ def main():
     equalWeights = (0.25, 0.25, 0.25, 0.25)
     avgRecallAtM = []
 
-    output = open('NoBadAnswers/intersectionsWordsResults.html', 'w')
+    output = open('NoBadAnswers/intersectionsWordsFixedTyposBigramsBeg.html', 'w')
 
-    for line in open('NoBadAnswers/intersectionsWordsBeg.txt'):
+    for line in open('NoBadAnswers/intersectionsWordsFixedTyposBigramsBeg.txt'):
         question = json.loads(line)
         qtitle = question['qtitle']
         qbody = question['qbody']
@@ -59,6 +60,7 @@ def main():
         # avgRecallAtM.append(recallAtM)
 
         gt = ' '.join(gtqueryTokens)
+        scoredWords = rerankQueryWordsWithScores(scoredProbes)
         for s in scoredProbes[:20]:
             queryStr = s[0]
             searchRef = 'http://www.google.com/search?hl=en&q=' + queryStr
@@ -67,7 +69,17 @@ def main():
                 output.write('-><a href=\"%s\">%s</a> :: %s <br/>\n' % (searchRef, queryStr, str(s[1])))
             else:
                 output.write('<a href=\"%s\">%s</a> :: %s <br/>\n' % (searchRef, queryStr, str(s[1])))
-                # print(s[0] + ' :: ' + str(s[1]))
+
+        output.write('<br/>\n<b>%s</b><br/>\n' % 'Reranked words:')
+        for w in scoredWords:
+            output.write('%s -- %f<br/>\n' % (w[0], w[1]))
+
+        kldSoredWords = keywordsNFromText(' '.join([qtitle, qtitle, qbody]), 10)
+        output.write('<br/>\n<b>%s</b><br/>\n' % 'Ranked by KLD words:')
+        for w in kldSoredWords:
+            output.write('%s -- %f<br/>\n' % (w[0], w[1]))
+
+
         # print('\n****\n')
         output.write('%s<br/>\n' % '\n****\n')
     # print(sum(avgRecallAtM) / len(avgRecallAtM))
