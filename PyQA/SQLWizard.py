@@ -23,26 +23,45 @@ class SQLWizard:
         connection.close()
         return questions
 
-    # fetches all answers for a given question id
+
+# fetches all answers for a given question id
     def getAnswersForQID(self, qid):
         connection = sqlite3.connect(self.dbPath)
-        sql = 'select aid, qid, answerText from answers where qid=' + str(qid) + ';'
+        # sql = 'select aid, qid, answerText from answers where qid=' + str(qid) + ';'
+        sql = 'select qid, answerText from answers where qid=' + str(qid) + ';'
         cursor = connection.execute(sql)
         answers = []
         for row in cursor:
-            aid = row[0]
-            qid = row[1]
-            answerText = row[2]
+            # aid = row[0]
+            aid = None
+            qid = row[0]
+            answerText = row[1]
             answer = AnswerSQL(aid, qid, answerText)
             answers.append(answer)
         connection.close()
         return answers
 
+
+    def getBestAnswerForQID(self, qid):
+        connection = sqlite3.connect(self.dbPath)
+        # sql = 'select aid, qid, answerText from answers where qid=' + str(qid) + ';'
+        sql = 'select qid, answerText from answers where qid=' + str(qid) + ' and best=1;'
+        cursor = connection.execute(sql)
+        bestAnswer = None
+        for row in cursor:
+            # aid = row[0]
+            aid = None
+            qid = row[0]
+            answerText = row[1]
+            bestAnswer = AnswerSQL(aid, qid, answerText)
+        connection.close()
+        return bestAnswer
+
     # get all distinct snippets for a give query
     def getNSnippetsForQuery(self, queryText, N):
         connection = sqlite3.connect(self.dbPath)
         if N == -1:
-            sql = 'select distinct snippet, queryText, docURL from snippets where querytext="' + queryText + '";'
+            sql = 'select distinct snippet, queryText, docURL from snippets where querytext="' + queryText.strip() + '";'
         else:
             sql = 'select distinct snippet, queryText, docURL from snippets where querytext="' + queryText + '" limit ' + str(N) + ';'
         cursor = connection.execute(sql)

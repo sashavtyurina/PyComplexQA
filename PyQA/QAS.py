@@ -7,12 +7,20 @@ class QuestionSQL:
         self.qid = qid
         self.qtitle = qtitle.lower()
         self.qbody = qbody.lower()
-        self.gtquery = gtquery.lower()
-        self.yahooqid = yahooqid.lower()
+        if gtquery:
+            self.gtquery = gtquery.lower()
+        else:
+            self.gtquery = None
+
+        if yahooqid:
+            self.yahooqid = yahooqid.lower()
+        else:
+            self.yahooqid = None
 
 class AnswerSQL:
     def __init__(self, aid, qid, answerText):
-        self.aid = aid
+        if aid:
+            self.aid = aid
         self.qid = qid
         self.answerText = re.sub('\n', ' ', answerText.lower())
 

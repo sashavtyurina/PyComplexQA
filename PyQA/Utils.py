@@ -6,14 +6,40 @@ import itertools
 from Keywords import *
 from SQLWizard import SQLWizard
 from KLDWizard import KLDWizard
+import operator
 
+
+def recallAtM(gtquery, rankedWords, M):
+    gtqueryTokens = gtquery.split()
+    accum = 0
+    for word in rankedWords[:M]:
+        splitWords = word.split()
+        for w in splitWords:
+            if w in gtqueryTokens:
+                accum += 1
+    return accum / M
+
+
+def precisionAtM(gtquery, rankedWords, M):
+    gtqueryTokens = gtquery.split()
+    accum = 0
+    for word in rankedWords[:M]:
+        splitWords = word.split()
+        for w in splitWords:
+            if w in gtqueryTokens:
+                accum += 1
+    if len(gtqueryTokens) == 0:
+        return 0
+    return accum / len(gtqueryTokens)
 
 # removes punctuations from the string
 def removePunctuation(str):
     str = re.sub(r'\n', ' ', str)
-    str = re.sub("[^A-Za-z\s\d']", ' ', str)
+    str = re.sub("[^A-Za-z\s\d\-']", ' ', str)
     str = re.sub("(?<![A-Za-z\d])'", ' ', str)
     str = re.sub("'(?![A-Za-z\d])", ' ', str)
+    str = re.sub("(?<![A-Za-z\d])-", ' ', str)
+    str = re.sub("-(?![A-Za-z\d])", ' ', str)
     return str
 
 
@@ -38,7 +64,7 @@ def dropStopWords(tokens):
 # replaces URLs with the domain name
 def removeURLs(str):
     # return re.sub(r'https?:\/\/([^\/]+)[^\s]*\s', '\g<1>', str)
-    return re.sub(r'https?://([^\/]+)\.[^\s]*\s', '\g<1> ', str)
+    return re.sub(r'https?://(www\.)?([^\/]+)\.[^\s]*\s', '\g<2> ', str)
 
 
 # performs s stemming of the list of tokens
@@ -54,6 +80,30 @@ def s_stemmer(tokens):
     return [s_stem(t) for t in tokens]
 
 
+def s_stemmerSmart(tokens):
+    def s_stem(word):
+        if re.match('.*[^ea]ies$', word):
+            return re.sub('ies$', 'y', word)
+        if re.match('.*[^oae]es$', word):
+            return re.sub('es$', 'e', word)
+        if re.match('.*[^us]s$', word):
+            return re.sub("(?<!')s$", '', word)
+        return word
+    uniqTokens = list(set(tokens))
+
+    resultTokens = []
+    for t in tokens:
+        if s_stem(t) == t:
+            resultTokens.append(t)
+        else:
+            if s_stem(t) in uniqTokens:  # they're not equal
+                resultTokens.append(s_stem(t))
+                continue
+            else:
+                resultTokens.append(t)
+    return resultTokens
+
+
 # performs text cleaning. Use this to do all the text cleaning
 def preprocessText(text):
     text = removeURLs(text)
@@ -61,14 +111,14 @@ def preprocessText(text):
     text = shrinkRepeatedChars(text)
     tokens = text.split(' ')
     tokens = dropStopWords(tokens)
-    tokens = s_stemmer(tokens)
+    # tokens = s_stemmer(tokens)
+    # tokens = s_stemmerSmart(tokens)
     tokens = removeShortTokens(tokens, 2)
     return ' '.join(tokens)
 
 
 # given a list of tokens, return all queries of length queryLength
-# also requires question text to put the tokens in the queries the same order as they were in the question
-def constructQueries(tokens, queryLength, rawQuestion):
+def constructQueries(tokens, queryLength):
     def addOne(queries, tokens):
         newQueries = {}
         for q in queries.items():
@@ -80,85 +130,84 @@ def constructQueries(tokens, queryLength, rawQuestion):
         return newQueries
 
 
-    # order tokens the same way they appear in the question
-    def sortTokens(tokensToSort, rawQuestion):
-        # for every token find its first occurence in the initial string
-        # then sort based on these indecies
-        tokensInd = {}
-        for t in tokensToSort:
-            if t not in tokensInd.keys():
-                ind = rawQuestion.find(t)
-                if ind == -1:
-                    ind = rawQuestion.find(t[:-1])
-                tokensInd[t] = ind
-        print(tokensInd)
-        sortedInd = sorted(tokensInd.items(), key=operator.itemgetter(1))
-        sortedTokens = [i[0] for i in sortedInd]
+    queriesOfLengths = {}
+    queries = {}
 
-        return sortedTokens
+    # sort tokens in order of their occurence in the initial question
+    # print('Found collocations: ' + str(findCollocations(rawQuestion)))
+    # tokens += findCollocations(rawQuestion)
+    # sortedTokens = sortTokens(tokens, rawQuestion)
+
+    # print('raw question :: ' + str(rawQuestion))
+    # print('sorted tokens :: ' + str(sortedTokens))
+
+    # start by creating all single word queries
+    for i in range(0, len(tokens)):
+        queries[tokens[i]] = i
+    queriesOfLengths[1] = queries.keys()
+
+    # append one word to existing queries
+    for i in range(1, queryLength):
+        queries = addOne(queries, tokens)
+        queriesOfLengths[i + 1] = queries.keys()
+
+    # print('queries :: ' + str(queriesOfLengths[queryLength]))
+    return queriesOfLengths[queryLength]
 
 
-    # find collocations and glue them together as a single token
-    # TODO: add answers text here as well?
-    def findCollocations(rawQuestion):
-        # split the question into blocks by punctuation marks
-        # blocks = [b.strip() for b in re.split('[^0-9A_Za-x\s]+', rawQuestion) if b.strip() != '']
-        # Example:
-        # blocks : ['why is my 5 month old pit bull puppy eating rocks',
-        # 'my dog is very active and has a really good appetite',
-        # 'she loves to play and is very well mannered',
-        # 'lately she has been eating small pea gravel from my landscaping',
-        # 'is she just being a puppy or is something wrong']
-        blocks = [b.strip() for b in re.split('[.,\?\!\-\:\;\(\)\{\}\[\]]+', rawQuestion) if b.strip() != '']
+# order tokens the same way they appear in the question
+def sortTokens(tokensToSort, rawQuestion):
+    # for every token find its first occurence in the initial string
+    # then sort based on these indecies
+    rawQuestion = preprocessText(rawQuestion)
+    tokensInd = {}
+    for t in tokensToSort:
+        if t not in tokensInd.keys():
+            ind = rawQuestion.find(t)
+            if ind == -1:
+                ind = rawQuestion.find(t[:-1])
+            tokensInd[t] = ind
+    # print(tokensInd)
+    sortedInd = sorted(tokensInd.items(), key=operator.itemgetter(1))
+    sortedTokens = [i[0] for i in sortedInd]
 
-        # for each block tokens. blocksTokens = List[List[Str]]
-        # Example:
-        # blocksTokens: [['month', 'old', 'pit', 'bull', 'puppy', 'eating', 'rock'],
-        # ['dog', 'active', 'good', 'appetite'],
-        # ['love', 'play', 'mannered'],
-        # ['lately', 'eating', 'small', 'pea', 'gravel', 'landscaping'],
-        # ['puppy', 'wrong']]
-        blocksTokens = [preprocessText(b).split() for b in blocks]
+    return sortedTokens
 
-        # compose bigrams. blocksBigrams = List[List[Str]]
-        # Example:
-        # blocksBigrams: [['month old',
-        #  'old pit',
-        #  'pit bull',
-        #  'bull puppy',
-        #  'puppy eating',
-        #  'eating rock'],
-        # ['dog active', 'active good', 'good appetite'],
-        # ['love play', 'play mannered'],
-        # ['lately eating',
-        #  'eating small',
-        #  'small pea',
-        #  'pea gravel',
-        #  'gravel landscaping'],
-        # ['puppy wrong']]
-        N = 2
-        blocksBigrams = [[' '.join(tokens[i: i + N]) for i in range(0, len(tokens) - N + 1)] for tokens in blocksTokens]
 
-        # flatten previous list of lists to a single list of strings
-        # Example:
-        # flatBigrams : ['month old',
-        # 'old pit',
-        # 'pit bull',
-        # 'bull puppy',
-        # 'puppy eating',
-        # 'eating rock',
-        # 'dog active',
-        # 'active good',
-        # 'good appetite',
-        # 'love play',
-        # 'play mannered',
-        # 'lately eating',
-        # 'eating small',
-        # 'small pea',
-        # 'pea gravel',
-        # 'gravel landscaping',
-        # 'puppy wrong']
-        flatBigrams = list(itertools.chain.from_iterable(blocksBigrams))
+# find collocations and glue them together as a single token
+# TODO: add answers text here as well?
+def findCollocations(rawQuestion):
+    blocks = [b.strip() for b in re.split('[.,\?\!\-\:\;\(\)\{\}\[\]]+', rawQuestion) if b.strip() != '']
+    blocksTokens = [preprocessText(b).split() for b in blocks]
+    N = 2
+    blocksBigrams = [[' '.join(tokens[i: i + N]) for i in range(0, len(tokens) - N + 1)] for tokens in blocksTokens]
+    flatBigrams = list(itertools.chain.from_iterable(blocksBigrams))
+
+    # find repetitive bigrams
+    freqBigrams = {}
+    for b in flatBigrams:
+        if b in freqBigrams.keys():
+            freqBigrams[b] += 1
+        else:
+            freqBigrams[b] = 1
+    # print('Freq bigrams ' + str(freqBigrams))
+    repBigrams = [b[0] for b in freqBigrams.items() if b[1] > 1]
+
+    return repBigrams
+
+
+def findCollocations1(rawQuestion):
+    blocks = [b.strip() for b in re.split('[.,\?\!\-\:\;\(\)\{\}\[\]]+', rawQuestion) if b.strip() != '']
+    blocksTokens = [preprocessText(b).split() for b in blocks]
+    # print('Block tokens :: ' + str(blocksTokens))
+
+    goOn = True
+    N = 2
+    blocksCollocations = []
+    while goOn:
+        newCollocations = [[' '.join(tokens[i: i + N]) for i in range(0, len(tokens) - N + 1)] for tokens in blocksTokens]
+        # print('newCollocations :: ' + str(newCollocations))
+        flatBigrams = list(itertools.chain.from_iterable(newCollocations))
 
         # find repetitive bigrams
         freqBigrams = {}
@@ -169,52 +218,60 @@ def constructQueries(tokens, queryLength, rawQuestion):
                 freqBigrams[b] = 1
         # print('Freq bigrams ' + str(freqBigrams))
         repBigrams = [b[0] for b in freqBigrams.items() if b[1] > 1]
-        print('Found collocations: ' + str(repBigrams))
-        return repBigrams
 
+        if len(repBigrams) == 0:
+            goOn = False
+        else:
+            N += 1
+            blocksCollocations += repBigrams
 
-    queriesOfLengths = {}
-    queries = {}
+    resCollocations = []
+    for c in blocksCollocations:
+        curCollocation = c
+        intersects = False
+        for cc in blocksCollocations:
+            if c == cc:
+                continue
+            if curCollocation in cc:
+                intersects = True
+                break
 
-    # sort tokens in order of their occurence in the initial question
-    # print('Found collocations: ' + str(findCollocations(rawQuestion)))
-    tokens += findCollocations(rawQuestion)
-    sortedTokens = sortTokens(tokens, rawQuestion)
+        if not intersects:
+            resCollocations.append(curCollocation)
 
-    print('raw question :: ' + str(rawQuestion))
-    print('sorted tokens :: ' + str(sortedTokens))
-
-    # start by creating all single word queries
-    for i in range(0, len(sortedTokens)):
-        queries[sortedTokens[i]] = i
-    queriesOfLengths[1] = queries.keys()
-
-    # append one word to existing queries
-    for i in range(1, queryLength):
-        queries = addOne(queries, sortedTokens)
-        queriesOfLengths[i + 1] = queries.keys()
-
-    print('queries :: ' + str(queriesOfLengths[queryLength]))
-    return queriesOfLengths[queryLength]
+    print('resCollocations :: ' + str(resCollocations))
+    return resCollocations
 
 
 def averageSnippetIntersection(snippetTokensSets, topWordsSet, queryTokensSet):
     intersections = []
     # print('Top words :: ' + str(topWordsSet))
     # print('Query tokens :: ' + str(queryTokensSet))
+    if len(snippetTokensSets) == 0:
+        raise ValueError('Empty set of snippets passed.')
+
     for singleSnippetTokens in snippetTokensSets:
         # print('Snippet tokens initial:: ' + str(singleSnippetTokens))
         # print('Top words :: ' + str(topWordsSet))
         # print('\n\n')
 
+
+        # remove query tokens from the snippet
         singleSnippetTokens.difference_update(queryTokensSet)
+
+        # words that are in common btw the snippet and the question
         intersection = singleSnippetTokens.intersection(topWordsSet)
         intersectionLength = len(intersection)
+
         snippetLength = len(singleSnippetTokens)
+        if snippetLength == 0:
+            continue
         # print('Intersection :: ' + str(intersection))
         # print('Intersection length :: ' + str(intersectionLength))
         # print('Snippet length :: ' + str(snippetLength))
 
+
+        # what fraction of the snippet is also in the question
         intersections.append(intersectionLength / snippetLength)
         # print(intersections)
         # print('\n***\n')
@@ -228,6 +285,9 @@ def totalSnippetIntersection(snippetTokensSet, topWordsSet, queryTokensSet):
     allSnippetsTokensSet = set(itertools.chain(*snippetTokensSet))
     allSnippetsTokensSet.difference_update(queryTokensSet)
     intersection = allSnippetsTokensSet.intersection(topWordsSet)
+
+    if len(allSnippetsTokensSet) == 0:
+        raise ValueError('Empty set of snippet tokens in totalSnippetIntersection.')
     result = len(intersection) / len(allSnippetsTokensSet)
     # print(result)
     return result
@@ -252,14 +312,35 @@ def scoreQuery(query, snippets, answersTopWords, questionTopWords, weights):
 # given a list of snippets remove the ones that were retrieved from the same page as the question (compare yahooqid)
 # and also remove the ones that look too similar to the question (more than 50% of snippet terms are in the question)
 def filterOutDuplicateSnippets(snippets, question):
-    cleanSnippets = []
+    # remove the snippets that are the same as each other
+    # then remove snippets that are the same as the question
+
+    uniqueSnippets = []
     for s in snippets:
-        if question.yahooqid in s.docURL:
+        exists = False
+        for us in uniqueSnippets:
+            if us.docURL == s.docURL or us.snippet == s.snippet:
+                exists = True
+                break
+        if exists:
+            continue
+        uniqueSnippets.append(s)
+
+
+    cleanSnippets = []
+    questionTokens = set(preprocessText(' '.join([question.qtitle, question.qbody])).split(' '))
+    for s in uniqueSnippets:
+
+        if question.yahooqid and question.yahooqid in s.docURL:
             continue
         snippetTokens = set(preprocessText(s.snippet).split(' '))
-        questionTokens = set(preprocessText(' '.join([question.qtitle, question.qbody])).split(' '))
+
+        if len(snippetTokens) == 0:
+            continue
         intersectionFraction = len(snippetTokens.intersection(questionTokens)) / len(snippetTokens)
-        if intersectionFraction > 0.5:
+        if intersectionFraction > 0.75:
+            print('Intersection fraction :: %f' % intersectionFraction)
+            print('Dublicate snippet :: %s\n' % s.snippet)
             continue
         cleanSnippets.append(s)
     return cleanSnippets
@@ -268,12 +349,24 @@ def filterOutDuplicateSnippets(snippets, question):
 # rerank words from queries by their score
 # given a list of scored queries, calculate the reranking of the query words
 # each word would have a score of a sum of all queries it is in
-def rerankQueryWordsWithScores(scoredQueries):
+def rerankQueryWordsWithScores(scoredQueries, collocations):
     wordsScores = {}
     for s in scoredQueries:
         queryText = s[0]
         queryScore = s[1]
-        words = queryText.split()
+
+        if len(collocations) == 0:
+            words = queryText.split()
+        else:
+            queryTokens = []
+            for c in collocations:
+                if c in queryText:
+                    queryTokens.append(c)
+                    queryText = queryText.replace(c, '')
+            queryTokens += queryText.split()
+            words = queryTokens
+
+
         for w in words:
             if w in wordsScores.keys():
                 wordsScores[w] += queryScore
@@ -334,8 +427,12 @@ def calcIntersections():
     questions = sqlWiz.getQuestions()
 
 
+    count = 19
 
     for question in questions:
+        if count != 0:
+            count -= 1
+            continue
 
         # extract top words from answers
         print('Extracting top answer words...')
@@ -437,30 +534,44 @@ def exportSnippetsFromDB():
 
 
 # imports questions from text file to a db
-def importQuestionsFromText():
-    connection = sqlite3.connect('Snippets.db')
+def importQuestionsFromText(pathToFile, pathToDB):
+    if pathToFile == '':
+        pathToFile = 'questions.txt'
+    if pathToDB == '':
+        pathToDB = 'Snippets.db'
+    qid = 1
+    connection = sqlite3.connect(pathToDB)
     cursor = connection.cursor()
     print('Connected to DB')
-    for line in open('questions.txt'):
+    for line in open(pathToFile):
         jQuestion = json.loads(line.strip())
         qtitle = jQuestion['qtitle']
         qbody = jQuestion['qbody']
-        gtquery = jQuestion['gtquery']
-        yahooqid = jQuestion['yahooqid']
-        sql = 'insert into questions (qtitle, qbody, gtquery, yahooqid) values (?, ?, ?, ?);'
-        cursor.execute(sql, (qtitle, qbody, gtquery, yahooqid))
-        qid = cursor.lastrowid
+        bestAnswer = jQuestion['bestanswer']
+        # gtquery = jQuestion['gtquery']
+        # yahooqid = jQuestion['yahooqid']
+        # sql = 'insert into questions (qtitle, qbody, gtquery, yahooqid) values (?, ?, ?, ?);'
+        sql = 'insert into questions (qid, qtitle, qbody) values (?, ?, ?);'
+        # cursor.execute(sql, (qtitle, qbody, gtquery, yahooqid))
+        cursor.execute(sql, (qid, qtitle, qbody))
+        # qid = cursor.lastrowid
         answers = jQuestion['answers']
         for a in answers:
-            sql = 'insert into answers (qid, answertext) values (?, ?)'
-            cursor.execute(sql, (qid, a['answer']))
+            best = False
+            if a == bestAnswer:
+                best = True
+            sql = 'insert into answers (qid, answertext, best) values (?, ?, ?)'
+            cursor.execute(sql, (qid, a, best))
+        qid += 1
     connection.commit()
     connection.close()
 
 
 # import snippets from text file to a db
-def importSnippetsFromText(pathToFile):
-    connection = sqlite3.connect('Snippets.db')
+def importSnippetsFromText(pathToFile, pathToDB):
+    if pathToDB == '':
+        pathToDB = 'Snippets.db'
+    connection = sqlite3.connect(pathToDB)
     cursor = connection.cursor()
     print('Connected to DB')
     for line in open(pathToFile):
@@ -591,3 +702,25 @@ def findMisspelledWords(outputFilename):
     with open(outputFilename, 'w') as f:
         for t in misspelledTokens:
             f.write('%s\n' % t)
+
+
+def selectDistinctWords():
+    """
+    Given a set of json questions, select distinct tokens from them.
+
+    Afterwards sort and delete duplicates:
+    sort DistinctWords.txt > DistinctWordsSorted.txt
+    uniq DistinctWordsSorted.txt > DistinctWordsUniq.txt
+    """
+    with open('DistinctWordsNew.txt', 'w') as fOut:
+        for line in open('SelectedQuestions.txt'):
+            qJson = json.loads(line.strip())
+            qtitle = qJson['qtitle']
+            qbody = qJson['qbody']
+            rawQuestion = qtitle + ' ' + qbody
+            tokens = set(Utils.preprocessText(rawQuestion).split())
+            for q in tokens:
+                fOut.write('%s\n' % q)
+
+
+

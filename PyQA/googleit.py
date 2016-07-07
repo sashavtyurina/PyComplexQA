@@ -1,7 +1,8 @@
 # ACCOUNT_KEY = '/Mf56CFpuSUUQKdutUsoquPduXPWJBjflVKxHC3GQAk' # sasha.vtyurina account
-# ACCOUNT_KEY = 'yxckQrsJG08opmtaZroAT9hMrAiD6CBgxK/NbWYFQns=' # mal.raynolds account
-ACCOUNT_KEY = '7ntaEOCRdOwFmQQg3NkTfwv/g+xfo2ZCHnxnMvpFdnQ' # ross.thedivorcer@outlook.com
-# ACCOUNT_KEY = 'mTrHvU3N4LLH6yl2RvjAJpkqhRG++wf7Jl4IjU8VN6w' # monica.velula.geller@outlook.com
+# ACCOUNT_KEY = 'yxckQrsJG08opmtaZroAT9hMrAiD6CBgxK/NbWYFQns='  # mal.raynolds account
+# ACCOUNT_KEY = '7ntaEOCRdOwFmQQg3NkTfwv/g+xfo2ZCHnxnMvpFdnQ'  # ross.thedivorcer@outlook.com
+# ACCOUNT_KEY = 'mTrHvU3N4LLH6yl2RvjAJpkqhRG++wf7Jl4IjU8VN6w'  # monica.velula.geller@outlook.com
+ACCOUNT_KEY = 'xWc/+Cg+Fa1H30srB4EC0mFuIQmHBLgqZQPuVz3RRxU'  # mike.hanniganbuffay@outlook.com
 TOP_DOC = 10
 import bing
 from os import listdir
@@ -12,18 +13,27 @@ import json
 def ask_bing(query, filename):
 
     # with open('FullProbes/BingSearchResultsQuest27.txt', 'a') as f:
+
     with open(filename, 'a') as f:
         bing_api = bing.Api(ACCOUNT_KEY)
         json_results = bing_api.query(query, source_type='Web', top=TOP_DOC)
 
+        resultCounter = 0
         for result in json_results:
             snippet = result['Title'] + ' ' + result['Description']
             url = result['Url']
-            searchHit = {'queryText' : query, 'snippet' : snippet, 'url': url}
+            searchHit = {'queryText': query, 'snippet': snippet, 'url': url}
             f.write('%s\n' % json.dumps(searchHit))
             print('%s\n' % json.dumps(searchHit))
+            resultCounter += 1
+
+        if resultCounter < TOP_DOC:
+            missingQueriesFile = open('MissingQueries.txt', 'a')
+            missingQueriesFile.write('%s\n' % query)
+            missingQueriesFile.close()
 
     print('Done with query :: ' + query)
+
 
 
 
@@ -51,8 +61,8 @@ def ask_bing(query, filename):
 
 
 def main():
-    infile = 'NoBadAnswers/MissingQueriesContinue.txt'
-    outfile = 'NoBadAnswers/MissingQueriesSearchResult.txt'
+    infile = 'Experiment1/newlyCreatedQueries.txt'
+    outfile = 'Experiment1/newlyCreatedQueriesSearchResults.txt'
     counter = 0
     with open(infile) as f:
         for line in f:

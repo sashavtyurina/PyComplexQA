@@ -32,13 +32,13 @@ def main():
     equalWeights = (0.25, 0.25, 0.25, 0.25)
     avgRecallAtM = []
 
-    output = open('NoBadAnswers/intersectionsWordsFixedTyposBigramsBeg.html', 'w')
+    output = open('Experiment1/DoubleTitleBestAnswer.html', 'w')
 
-    for line in open('NoBadAnswers/intersectionsWordsFixedTyposBigramsBeg.txt'):
+    for line in open('Experiment1/intersectionsDoubleTitleBestAnswer.txt'):
         question = json.loads(line)
         qtitle = question['qtitle']
         qbody = question['qbody']
-        gtqueryTokens = preprocessText(question['gtquery']).split(' ')
+        # gtqueryTokens = preprocessText(question['gtquery']).split(' ')
         # print(' '.join([qtitle, qbody]))
         output.write('%s<br/>\n' % ' '.join([qtitle, qbody]))
         # gtquery = Utils.preprocessText(question['gtquery'])
@@ -53,22 +53,22 @@ def main():
         # topWords = topWords[:M]
         # print('top words :: ' + str(topWords))
         # print('gt query :: ' + str(gtqueryTokens))
-        output.write('gt query :: %s<br/>\n' % str(gtqueryTokens))
+        # output.write('gt query :: %s<br/>\n' % str(gtqueryTokens))
 
         # recallAtM = len(set(topWords).intersection(gtqueryTokens)) / len(gtqueryTokens)
         # print(recallAtM)
         # avgRecallAtM.append(recallAtM)
 
-        gt = ' '.join(gtqueryTokens)
+        # gt = ' '.join(gtqueryTokens)
         scoredWords = rerankQueryWordsWithScores(scoredProbes)
         for s in scoredProbes[:20]:
             queryStr = s[0]
             searchRef = 'http://www.google.com/search?hl=en&q=' + queryStr
-            if queryStr == gt:
-                # print('->' + s[0] + ' :: ' + str(s[1]))
-                output.write('-><a href=\"%s\">%s</a> :: %s <br/>\n' % (searchRef, queryStr, str(s[1])))
-            else:
-                output.write('<a href=\"%s\">%s</a> :: %s <br/>\n' % (searchRef, queryStr, str(s[1])))
+            # if queryStr == gt:
+            # print('->' + s[0] + ' :: ' + str(s[1]))
+            # output.write('-><a href=\"%s\">%s</a> :: %s <br/>\n' % (searchRef, queryStr, str(s[1])))
+            # else:
+            output.write('<a href=\"%s\">%s</a> :: %s <br/>\n' % (searchRef, queryStr, str(s[1])))
 
         output.write('<br/>\n<b>%s</b><br/>\n' % 'Reranked words:')
         for w in scoredWords:
@@ -77,7 +77,8 @@ def main():
         kldSoredWords = keywordsNFromText(' '.join([qtitle, qtitle, qbody]), 10)
         output.write('<br/>\n<b>%s</b><br/>\n' % 'Ranked by KLD words:')
         for w in kldSoredWords:
-            output.write('%s -- %f<br/>\n' % (w[0], w[1]))
+            # output.write('%s -- %f<br/>\n' % (w[0], w[1]))
+            output.write('%s<br/>\n' % w)
 
 
         # print('\n****\n')
@@ -101,3 +102,10 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
+
+
+
+
+

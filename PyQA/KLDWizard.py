@@ -1,44 +1,45 @@
+"""Class that deals with KL divergence scores."""
 import math
 from operator import itemgetter
 
+
 class KLDWizard:
-    # class that will help figure out word frequencies and KL divergence
+    """Class that will help figure out word frequencies and KL divergence."""
 
     wordProbabilities = {}
 
     def __init__(self):
-
-        # load the word frequencies
+        """Pull global word frequencies from a file."""
         for line in open('WordFrequencies.txt'):
+            # print(line)
             word, frequency, totalWords = line.strip().split('|')
-            # print(frequency)
-            # print(int(frequency))
             frequency = int(frequency)
             totalWords = int(totalWords)
-
-
             self.wordProbabilities[word] = (frequency * 1.0) / (totalWords * 1.0)
             self.totalWordsClueweb = totalWords
 
 
-    # calculates KL divergence of a single word
     def wordKLD(self, word, foregroundProbability):
+        """Calculate pointwise KL divergence value for a given word and foreground model."""
+        missingWords = open('missing words.txt', 'a')
         if word not in self.wordProbabilities:
+            missingWords.write('%s\n' % word)
             print(word + ' not in the file')
             return -1
         backgroundProbability = self.wordProbabilities[word]
         P = foregroundProbability
         Q = backgroundProbability
 
-
         # kl divergence is not defined
         if Q == 0:
             Q = 1 / self.totalWordsClueweb
+
+        missingWords.close()
         return P * math.log(P / Q)
 
 
-    # returns a list of N words with the highest KLD score
     def topNWordsFromTokens(self, tokens, N):
+        """Return N scored tokens with the highest KLD scores."""
         foreground = KLDWizard.foregroundModel(tokens)
 
         scoredWords = {}
@@ -46,26 +47,31 @@ class KLDWizard:
             kldScore = self.wordKLD(t, foreground[t])
             if not kldScore == -1:
                 scoredWords[t] = kldScore
-        # print(scoredWords.items())
+
         sortedScoredWords = sorted(scoredWords.items(), key=itemgetter(1), reverse=True)
-        # print(sortedScoredWords)
+
+        # if N == -1 return all tokens
         if N == -1:
-            return sortedScoredWords
+            N = len(sortedScoredWords)
         return sortedScoredWords[:N]
 
-    # same as topNWordsFromTokens, only with a foreground model given
+
     def topNWordsFromTokensForeground(self, foregroundModel, N):
+        """Return a list N scored tokens with the higest KL divergence scores, given a foreground model."""
         scoredWords = {}
         for t in foregroundModel.keys():
             scoredWords[t] = self.wordKLD(t, foregroundModel[t])
 
         sortedScoredWords = sorted(scoredWords.items(), key=itemgetter(1), reverse=True)
+
+        # if N == -1 return all tokens
+        if N == -1:
+            N = len(sortedScoredWords)
         return sortedScoredWords[:N]
 
 
-
-    # given a list of tokens builds a foreground distibution model
     def foregroundModel(tokens):
+        """Build a foreground probability given a list of tokens."""
         result = {}
 
         for t in tokens:
@@ -75,6 +81,6 @@ class KLDWizard:
                 result[t] += 1.0
 
         for t in result.keys():
-            result[t] /= (len(tokens)*1.0)
+            result[t] /= (len(tokens) * 1.0)
 
         return result

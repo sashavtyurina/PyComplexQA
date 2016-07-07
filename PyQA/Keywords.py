@@ -11,9 +11,18 @@ import itertools
 kldWiz = KLDWizard()
 
 
+
+
 def keywordsNFromText(text, N):
+    """Preprocess text, split into tokens. Return top N scored words by KL-divergence."""
     tokens = Utils.preprocessText(text).split(' ')
-    # print('Tokens :: ' + str(tokens))
+    sortedScoredWords = [i[0] for i in kldWiz.topNWordsFromTokens(tokens, N)]
+    return sortedScoredWords
+
+
+def scoredKeywordsNFromText(text, N):
+    """Preprocess text, split into tokens. Return top N scored words by KL-divergence."""
+    tokens = Utils.preprocessText(text).split(' ')
     return kldWiz.topNWordsFromTokens(tokens, N)
 
 
@@ -84,6 +93,7 @@ def topMWordsbyfrequency(queryTokens, M):
     sortedTokensScored = sorted(KLDWizard.foregroundModel(queryTokens).items(), key=itemgetter(1), reverse=True)
     sortedTokens = [item[0] for item in sortedTokensScored[:M]]
     return sortedTokens
+
 
 # given partial intersections for a single query and weights(4 numbers tuple) find query score
 def queryScoreWithWeights(partialIntersections, weights):
